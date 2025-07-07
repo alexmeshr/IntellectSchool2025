@@ -1,6 +1,11 @@
 test.py
 recordings/*
-*.pt
+yolo*-seg.pt
 __pycache__/*
 templates/index_test.html
 school_data/*
+.i*
+*npy
+*avi
+*mp4
+*pt

@@ -5,16 +5,13 @@ from config import Config
 
 class DepthProcessor:
     @staticmethod
-    def remove_person_from_depth(depth_image: np.ndarray, person_mask: np.ndarray) -> np.ndarray:
-        """Удаление людей из карты глубины"""
+    def keep_only_baggage(depth_image: np.ndarray, baggage_mask: np.ndarray) -> np.ndarray:
+        """Сохраняет только багаж в карте глубины, обнуляя все остальное"""
+        # Создаем копию глубинного изображения
         cleaned_depth = depth_image.copy()
         
-        # Минимальное расширение маски
-        kernel = np.ones((3, 3), np.uint8)
-        person_mask_dilated = cv2.dilate(person_mask, kernel, iterations=1)
-        
-        # Обнуление областей с людьми
-        cleaned_depth[person_mask_dilated > 0] = 0
+        # Обнуляем все области, где маска багажа равна 0 (не багаж)
+        cleaned_depth[baggage_mask == 0] = 0
         
         return cleaned_depth
     

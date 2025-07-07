@@ -3,6 +3,7 @@ import pyrealsense2 as rs
 import numpy as np
 from interfaces import ICameraInterface
 from config import Config
+import cv2
 
 class RealSenseCamera(ICameraInterface):
     def __init__(self):
@@ -48,6 +49,9 @@ class RealSenseCamera(ICameraInterface):
             
             depth_image = np.asanyarray(depth_frame.get_data())
             color_image = np.asanyarray(color_frame.get_data())
+            if Config.ROTATE:
+                depth_image = cv2.rotate(depth_image, cv2.ROTATE_90_CLOCKWISE)
+                color_image = cv2.rotate(color_image, cv2.ROTATE_90_CLOCKWISE)
             
             return color_image, depth_image
             

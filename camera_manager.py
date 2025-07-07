@@ -7,11 +7,26 @@ from video_recorder import VideoRecorder
 from config import Config
 
 class CameraManager:
-    def __init__(self, camera: ICameraInterface):
+    def __init__(self, camera: ICameraInterface, camera_intrinsics=None):
         self.camera = camera
-        self.frame_processor = FrameProcessor()
+        
+        # Дефолтные параметры для RealSense D455
+        if camera_intrinsics is None:
+            camera_intrinsics = {
+                'fx': 382.544,  # Примерные значения для 640x480
+                'fy': 382.544,
+                'cx': 320.0,
+                'cy': 240.0,
+                'depth_scale': 0.001
+            }
+        
+        self.frame_processor = FrameProcessor(camera_intrinsics)
         self.video_recorder = VideoRecorder()
         self.running = False
+        
+    def export_tracked_objects(self):
+        """Экспорт облаков точек отслеживаемых объектов"""
+        return self.frame_processor.export_point_clouds()
         
     def start(self):
         """Запуск системы"""
