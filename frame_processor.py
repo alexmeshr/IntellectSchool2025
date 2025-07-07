@@ -9,6 +9,14 @@ from point_cloud_reconstructor import PointCloudReconstructor
 from depth_processor import DepthProcessor
 from config import Config
 
+def non_max_suppression_bbox(detections, iou_threshold=0.5):
+        boxes = [d['bbox'] for d in detections]
+        scores = [d.get('confidence', 1.0) for d in detections]
+
+        indices = cv2.dnn.NMSBoxes(boxes, scores, score_threshold=0.1, nms_threshold=iou_threshold)
+        indices = indices.flatten() if len(indices) > 0 else []
+        return [detections[i] for i in indices]
+
 class FrameProcessor:
     def __init__(self, camera_intrinsics=None):
         self.detector = BaggageDetector()
@@ -26,6 +34,7 @@ class FrameProcessor:
         self.frame_count = 0
         self.enable_tracking = True  # Флаг для включения/выключения трекинга
         
+
     def process_frame(self, color_image, depth_image, camera_pose=None):
         """Обработка кадра: детекция, сегментация, очистка depth"""
         self.frame_count += 1
@@ -46,7 +55,9 @@ class FrameProcessor:
         # Трекинг багажа (если включен)
         tracked_objects = {}
         if self.enable_tracking:
-            tracked_objects = self.tracker.update(detection_results['baggage_detections'])
+
+            filtered_detections = non_max_suppression_bbox(detection_results['baggage_detections'])
+            tracked_objects = self.tracker.update(filtered_detections)
             
             # Сохранение наблюдений для 3D реконструкции
             if self.reconstructor is not None:
@@ -158,9 +169,9 @@ class FrameProcessor:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
             
             # Центроид
-            if tracked_obj.centroid:
-                cv2.circle(color_with_mask, tracked_obj.centroid, 4, color, -1)
-                cv2.circle(color_with_mask, tracked_obj.centroid, 5, (255, 255, 255), 1)
+            #if tracked_obj.centroid:
+            #    cv2.circle(color_with_mask, tracked_obj.centroid, 4, color, -1)
+            #    cv2.circle(color_with_mask, tracked_obj.centroid, 5, (255, 255, 255), 1)
         
         return color_with_mask
     
