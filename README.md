@@ -37,6 +37,8 @@ python app.py
 ```bash
 # С использованием записанных видео
 python app.py --mock --video path/to/rgb.mp4 --depth path/to/depth.avi
+# Например
+python app.py --mock --video .\\raw_data\\raw_rgb_20250707_082118.mp4 --depth .\\raw_data\\raw_depth_20250707_082118.avi
 ```
 
 ### Использование отдельных модулей для тестирования
