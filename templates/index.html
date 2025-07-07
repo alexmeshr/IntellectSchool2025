@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система определения габаритов багажа</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .video-container {
+            text-align: center;
+            margin-bottom: 30px;
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #videoFeed {
+            max-width: 100%;
+            height: auto;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-start {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .btn-start:hover {
+            background-color: #45a049;
+        }
+        .btn-stop {
+            background-color: #f44336;
+            color: white;
+        }
+        .btn-stop:hover {
+            background-color: #da190b;
+        }
+        .btn-refresh {
+            background-color: #2196F3;
+            color: white;
+        }
+        .btn-refresh:hover {
+            background-color: #0b7dda;
+        }
+        .status {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.recording {
+            background-color: #ffebee;
+            color: #c62828;
+            animation: pulse 2s infinite;
+        }
+        .status.idle {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        .recordings {
+            margin-top: 30px;
+        }
+        .recordings h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .recordings-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .recording-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .recording-item:last-child {
+            border-bottom: none;
+        }
+        .recording-info {
+            flex: 1;
+        }
+        .recording-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .recording-details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .checkbox-group {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+        .checkbox-group input[type="checkbox"] {
+            cursor: pointer;
+        }
+        .info-panel {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .info-panel h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .info-item {
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .info-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RealSense Person Removal System</h1>
+        
+        <div class="video-container">
+            <img id="videoFeed" src="/video_feed" alt="Video Stream">
+        </div>
+        
+        <div id="status" class="status idle">
+            <span id="statusText">Система готова</span>
+        </div>
+        
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" id="separateFiles" name="separateFiles">
+                <span>Записывать отдельные файлы (RGB, Depth, Cleaned)</span>
+            </label>
+            <label>
+                <input type="checkbox" id="saveRaw" name="saveRaw" checked>
+                <span>Сохранять исходные данные</span>
+            </label>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <button id="startBtn" class="btn-start" onclick="startRecording()">
+                    Начать запись
+                </button>
+                <button id="stopBtn" class="btn-stop" onclick="stopRecording()" disabled>
+                    Остановить запись
+                </button>
+            </div>
+            <div class="control-group">
+                <button class="btn-refresh" onclick="refreshRecordings()">
+                    Обновить список записей
+                </button>
+            </div>
+        </div>
+        
+        <div class="info-panel">
+            <h3>Информация о системе</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Разрешение RGB</div>
+                    <div class="info-value">640x480</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Разрешение Depth</div>
+                    <div class="info-value">640x480</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">FPS</div>
+                    <div class="info-value">15</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Модель YOLO</div>
+                    <div class="info-value">YOLOv8l-seg</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="recordings">
+            <h2>Записанные файлы</h2>
+            <div id="recordingsList" class="recordings-list">
+                <p style="text-align: center; color: #666;">Загрузка...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRecording = false;
+
+        function updateStatus() {
+            fetch('/recording_status')
+                .then(response => response.json())
+                .then(data => {
+                    isRecording = data.recording;
+                    const statusEl = document.getElementById('status');
+                    const statusText = document.getElementById('statusText');
+                    const startBtn = document.getElementById('startBtn');
+                    const stopBtn = document.getElementById('stopBtn');
+                    
+                    if (isRecording) {
+                        statusEl.className = 'status recording';
+                        statusText.textContent = 'Идет запись...';
+                        startBtn.disabled = true;
+                        stopBtn.disabled = false;
+                        
+                        if (data.separate) {
+                            statusText.textContent += ' (отдельные файлы)';
+                        }
+                    } else {
+                        statusEl.className = 'status idle';
+                        statusText.textContent = 'Система готова';
+                        startBtn.disabled = false;
+                        stopBtn.disabled = true;
+                    }
+                });
+        }
+
+        function startRecording() {
+            const separate = document.getElementById('separateFiles').checked;
+            const saveRaw = document.getElementById('saveRaw').checked;
+            
+            fetch('/start_recording', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    separate: separate,
+                    save_raw: saveRaw
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateStatus();
+                    showNotification(data.message, 'success');
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            });
+        }
+
+        function stopRecording() {
+            fetch('/stop_recording', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateStatus();
+                    refreshRecordings();
+                    showNotification(data.message, 'success');
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            });
+        }
+
+        function refreshRecordings() {
+            fetch('/recordings')
+                .then(response => response.json())
+                .then(data => {
+                    const listEl = document.getElementById('recordingsList');
+                    
+                    if (data.files.length === 0) {
+                        listEl.innerHTML = '<p style="text-align: center; color: #666;">Нет записанных файлов</p>';
+                    } else {
+                        listEl.innerHTML = data.files.map(file => `
+                            <div class="recording-item">
+                                <div class="recording-info">
+                                    <div class="recording-name">${file.name}</div>
+                                    <div class="recording-details">
+                                        ${file.path} | ${file.size} | ${file.date}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                });
+        }
+
+        function showNotification(message, type) {
+            // Простое уведомление через alert
+            // В реальном приложении можно использовать более красивые уведомления
+            alert(message);
+        }
+
+        // Обновление статуса каждые 2 секунды
+        setInterval(updateStatus, 2000);
+
+        // Начальная загрузка
+        updateStatus();
+        refreshRecordings();
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+test.py
+recordings/*
+*.pt
+__pycache__/*
+templates/index_test.html
+school_data/*
