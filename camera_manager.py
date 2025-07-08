@@ -9,16 +9,7 @@ from config import Config
 class CameraManager:
     def __init__(self, camera: ICameraInterface, camera_intrinsics=None):
         self.camera = camera
-        
-        # Дефолтные параметры для RealSense D455
-        if camera_intrinsics is None:
-            camera_intrinsics = {
-                'fx': 382.544,  # Примерные значения для 640x480
-                'fy': 382.544,
-                'cx': 320.0,
-                'cy': 240.0,
-                'depth_scale': 0.001
-            }
+            
         
         self.frame_processor = FrameProcessor(camera_intrinsics)
         self.video_recorder = VideoRecorder()

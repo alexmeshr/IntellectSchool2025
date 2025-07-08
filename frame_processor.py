@@ -71,10 +71,12 @@ class FrameProcessor:
                 if tracked_obj.mask is not None:
                     # Извлекаем значения глубины под маской
                     depth_values = depth_image[tracked_obj.mask > 0]
+                    rgb_values = color_image[tracked_obj.mask > 0]
                     if len(depth_values) > 0:
                         tracked_obj.add_depth_observation(
                             tracked_obj.mask, 
                             depth_values,
+                            rgb_values,
                             timestamp
                         )
         
@@ -239,7 +241,7 @@ class FrameProcessor:
                 'unique_id': tracked_obj.unique_id,
                 'point_cloud': point_cloud,
                 'mesh': mesh,
-                'rgb_image': tracked_obj.rgb_crops[-1] if tracked_obj.rgb_crops else None,
+                'rgb_images': tracked_obj.rgb_crops,
                 'all_masks': tracked_obj.depth_masks,
                 'selected_masks': tracked_obj.selected_masks,
                 'timestamp': datetime.now()

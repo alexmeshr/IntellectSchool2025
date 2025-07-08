@@ -262,10 +262,6 @@ class TrackedObject:
         
         # История для восстановления 3D
         self.rgb_crops = []
-        self.depth_crops = []
-        self.masks_history = []
-        self.camera_poses = []
-        self.timestamps = []
         
         # Параметры для 3D реконструкции
         self.depth_masks = []  # Список кортежей (mask, depth_values, timestamp)
@@ -299,11 +295,13 @@ class TrackedObject:
         if 'area' in detection:
             self.area = detection['area']
 
-    def add_depth_observation(self, mask, depth_values, timestamp):
+    def add_depth_observation(self, mask, depth_values,rgb_values, timestamp):
         """Добавление наблюдения depth маски"""
         self.depth_masks.append({
             'mask': mask.copy(),
             'depth_values': depth_values.copy(),
+            'rgb_values' : rgb_values.copy(),
             'timestamp': timestamp,
             'centroid': self.centroid.copy() if self.centroid is not None else None
         })
+        #self.rgb_crops.append(

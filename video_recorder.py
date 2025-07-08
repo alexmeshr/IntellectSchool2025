@@ -127,6 +127,36 @@ class VideoRecorder:
             
         except Exception as e:
             return False, f"Ошибка остановки записи: {e}"
+
+        def process_and_write_from_files(self, rgb_folder, depth_npy_folder):
+            """Обрабатывает и записывает RGB и глубинные кадры из файлов"""
+            rgb_files = sorted([f for f in os.listdir(rgb_folder) if f.endswith(('.png', '.jpg'))])
+            depth_files = sorted([f for f in os.listdir(depth_npy_folder) if f.endswith('.npy')])
+
+            if len(rgb_files) != len(depth_files):
+                print("Количество RGB и depth кадров не совпадает!")
+                return
+
+            for rgb_file, depth_file in zip(rgb_files, depth_files):
+                try:
+                    # Загрузка изображений
+                    color_image = cv2.imread(os.path.join(rgb_folder, rgb_file))
+                    depth_image = np.load(os.path.join(depth_npy_folder, depth_file))
+
+                    # Глубина в colormap
+                    #depth_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
+                    #depth_colormap = cv2.applyColorMap(depth_normalized.astype(np.uint8), cv2.COLORMAP_JET)
+
+                    # Комбинированное изображение (эмуляция)
+                    combined = np.hstack((color_image.copy(), color_image.copy(), color_image.copy()))
+
+                    # Запись
+                    self.write_frame(color_image, depth_image, color_with_mask,
+                                    depth_colormap, cleaned_depth_colormap, combined)
+
+                except Exception as e:
+                    print(f"Ошибка обработки кадра {rgb_file}: {e}")
+
     
     @staticmethod
     def get_recordings_list():

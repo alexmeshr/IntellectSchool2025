@@ -38,6 +38,15 @@ class Config:
     # Настройки записи
     VIDEO_CODEC = 'mp4v'
     JPEG_QUALITY = 70
+
+    # Дефолтные параметры для RealSense D455
+    CAMERA_INTRINSICS = {
+                'fx': 382.544,  # Примерные значения для 640x480
+                'fy': 382.544,
+                'cx': 320.0,
+                'cy': 240.0,
+                'depth_scale': 0.001
+            }
     
     @staticmethod
     def ensure_directories():

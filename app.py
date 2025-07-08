@@ -90,7 +90,7 @@ def main(use_mock=False, video_path=None, depth_path=None):
             camera = RealSenseCamera()
         
         # Создание менеджера
-        camera_manager = CameraManager(camera)
+        camera_manager = CameraManager(camera, Config.CAMERA_INTRINSICS)
         camera_manager.start()
         
         print("Система готова к работе")
