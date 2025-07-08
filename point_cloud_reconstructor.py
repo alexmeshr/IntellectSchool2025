@@ -50,7 +50,7 @@ class PointCloudReconstructor:
             depth_image[y_coords, x_coords] = depth_values
             
             # Конвертируем в формат Open3D (миллиметры в метры)
-            depth_o3d = o3d.geometry.Image((depth_image * 1000).astype(np.uint16))
+            depth_o3d = o3d.geometry.Image((depth_image).astype(np.uint16))
             
             # Создаем облако точек
             pcd = o3d.geometry.PointCloud.create_from_depth_image(
@@ -175,7 +175,7 @@ class PointCloudReconstructor:
         mesh.remove_duplicated_triangles()
         mesh.remove_duplicated_vertices()
         mesh.remove_non_manifold_edges()
-        
+
         
         return mesh
     

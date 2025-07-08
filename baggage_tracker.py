@@ -304,4 +304,3 @@ class TrackedObject:
             'timestamp': timestamp,
             'centroid': self.centroid.copy() if self.centroid is not None else None
         })
-        #self.rgb_crops.append(

@@ -229,11 +229,11 @@ class FrameProcessor:
             
             # Опционально создаем mesh
             mesh = None
-            if len(point_cloud) > 1000:  # Достаточно точек для меша
-                try:
-                    mesh = self.reconstructor.create_mesh(point_cloud)
-                except:
-                    print(f"Object {tracked_obj.id}: не удалось создать mesh")
+            #if len(point_cloud) > 1000:  # Достаточно точек для меша
+            #    try:
+            #        mesh = self.reconstructor.create_mesh(point_cloud)
+            #    except:
+            #        print(f"Object {tracked_obj.id}: не удалось создать mesh")
             
             # Сохраняем результат
             self.completed_objects.append({

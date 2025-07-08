@@ -76,7 +76,7 @@ def get_recordings():
         return jsonify({'files': files})
     return jsonify({'files': []})
 
-def main(use_mock=False, video_path=None, depth_path=None):
+def main(use_mock=False, rgb_folder=None, depth_folder=None):
     """Основная функция запуска"""
     global camera_manager
     
@@ -84,7 +84,7 @@ def main(use_mock=False, video_path=None, depth_path=None):
         # Выбор камеры
         if use_mock:
             print("Использование mock камеры для тестирования")
-            camera = MockCamera(video_path, depth_path)
+            camera = MockCamera(rgb_folder, depth_folder)
         else:
             print("Инициализация Intel RealSense...")
             camera = RealSenseCamera()
@@ -113,5 +113,5 @@ if __name__ == '__main__':
     parser.add_argument('--depth', type=str, help='Путь к depth видео для mock камеры')
     
     args = parser.parse_args()
-    main(use_mock=args.mock, video_path=args.video, depth_path=args.depth)
+    main(use_mock=args.mock, rgb_folder=args.video, depth_folder=args.depth)
 

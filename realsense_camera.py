@@ -34,6 +34,17 @@ class RealSenseCamera(ICameraInterface):
         
         if depth_sensor.supports(rs.option.laser_power):
             depth_sensor.set_option(rs.option.laser_power, Config.LASER_POWER)
+
+        intr = profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics()
+        #rs.set(intrinsics.Width,480)
+        #rs.set(intrinsics.Height,640)
+        print("ppx is: ",intr.ppx)
+        print("ppy is: ",intr.ppy)
+        print("fx is: ",intr.fx)
+        print("fy is: ",intr.fy)
+        #print("cx is: ",intr.cx)
+        #print("cy is: ",intr.cy)
+
     
     def get_frames(self):
         """Получить выровненные RGB и depth кадры"""

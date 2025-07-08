@@ -9,7 +9,6 @@ class VideoRecorder:
     def __init__(self):
         self.recording = False
         self.writers = {}
-        self.raw_writers = {}
         self.filenames = {}
         self.frame_count = 0
         Config.ensure_directories()
@@ -29,9 +28,13 @@ class VideoRecorder:
                 'rgb': f"{Config.OUTPUT_DIR}/rgb_{timestamp}.mp4",
                 'depth': f"{Config.OUTPUT_DIR}/depth_{timestamp}.mp4",
                 'cleaned': f"{Config.OUTPUT_DIR}/cleaned_{timestamp}.mp4",
-                'raw_rgb': f"{Config.RAW_DATA_DIR}/raw_rgb_{timestamp}.mp4",
-                'raw_depth': f"{Config.RAW_DATA_DIR}/raw_depth_{timestamp}.avi"
+                'raw_rgb_dir': f"{Config.RAW_DATA_DIR}/rgb_{timestamp}",
+                'raw_depth_dir': f"{Config.RAW_DATA_DIR}/depth_{timestamp}"
             }
+            
+            # Создаем директории для сырых данных
+            os.makedirs(self.filenames['raw_rgb_dir'], exist_ok=True)
+            os.makedirs(self.filenames['raw_depth_dir'], exist_ok=True)
             
             self.record_separate = record_separate
             self.save_raw = save_raw
@@ -51,7 +54,7 @@ class VideoRecorder:
         try:
             self.frame_count += 1
             
-            # Инициализация писателей при первом кадре
+            # Инициализация писателей при первом кадре (только для обработанных данных)
             if not self.writers:
                 h, w = color_image.shape[:2]
                 fourcc = cv2.VideoWriter_fourcc(*Config.VIDEO_CODEC)
@@ -67,15 +70,6 @@ class VideoRecorder:
                     h_combined, w_combined = combined.shape[:2]
                     self.writers['combined'] = cv2.VideoWriter(
                         self.filenames['combined'], fourcc, Config.FPS, (w_combined, h_combined))
-                
-                # Писатели для сырых данных
-                if self.save_raw:
-                    self.raw_writers['rgb'] = cv2.VideoWriter(
-                        self.filenames['raw_rgb'], fourcc, Config.FPS, (w, h))
-                    # Для depth используем lossless кодек
-                    self.raw_writers['depth'] = cv2.VideoWriter(
-                        self.filenames['raw_depth'], 
-                        cv2.VideoWriter_fourcc(*'FFV1'), Config.FPS, (w, h), False)
             
             # Запись обработанных кадров
             if self.record_separate:
@@ -85,22 +79,20 @@ class VideoRecorder:
             else:
                 self.writers['combined'].write(combined)
             
-            # Запись сырых данных
+            # Сохранение сырых данных как отдельные файлы (без сжатия)
             if self.save_raw:
-                self.raw_writers['rgb'].write(color_image)
-                # Нормализация depth для записи в 8-bit
-                depth_normalized = (depth_image / depth_image.max() * 255).astype(np.uint8)
-                self.raw_writers['depth'].write(depth_normalized)
+                # RGB как PNG (lossless)
+                rgb_filename = f"{self.filenames['raw_rgb_dir']}/frame_{self.frame_count:06d}.png"
+                cv2.imwrite(rgb_filename, color_image)
                 
-                # Дополнительно сохраняем каждый N-й кадр как .npy для точных данных
-                if self.frame_count % 30 == 0:  # Каждые 2 секунды при 15 FPS
-                    np.save(f"{Config.RAW_DATA_DIR}/depth_frame_{self.frame_count:06d}.npy", 
-                           depth_image)
+                # Depth как NPY (точные 16-bit данные)
+                depth_filename = f"{self.filenames['raw_depth_dir']}/frame_{self.frame_count:06d}.npy"
+                np.save(depth_filename, depth_image)
                 
         except Exception as e:
             print(f"Ошибка записи кадра: {e}")
     
-    def stop_recording(self):
+    def stop_recording(self, return_files=False):
         """Остановить запись"""
         if not self.recording:
             return False, "Запись не идет"
@@ -113,32 +105,33 @@ class VideoRecorder:
                 if writer:
                     writer.release()
             
-            for writer in self.raw_writers.values():
-                if writer:
-                    writer.release()
-            
             self.writers = {}
-            self.raw_writers = {}
             
             files = [os.path.basename(f) for f in self.filenames.values() 
                     if os.path.exists(f)]
-            
+            if return_files:
+                return self.filenames['raw_rgb_dir'], self.filenames['raw_depth_dir']
             return True, f"Записано: {', '.join(files)}"
             
         except Exception as e:
             return False, f"Ошибка остановки записи: {e}"
 
-        def process_and_write_from_files(self, rgb_folder, depth_npy_folder):
+    
+    def process_and_write_from_files(self, rgb_folder, depth_npy_folder, count=None):
             """Обрабатывает и записывает RGB и глубинные кадры из файлов"""
+            self.start_recording()
             rgb_files = sorted([f for f in os.listdir(rgb_folder) if f.endswith(('.png', '.jpg'))])
             depth_files = sorted([f for f in os.listdir(depth_npy_folder) if f.endswith('.npy')])
 
             if len(rgb_files) != len(depth_files):
                 print("Количество RGB и depth кадров не совпадает!")
                 return
-
+            idx = 0
             for rgb_file, depth_file in zip(rgb_files, depth_files):
                 try:
+                    idx+=1
+                    if count is not None and idx > count:
+                        break
                     # Загрузка изображений
                     color_image = cv2.imread(os.path.join(rgb_folder, rgb_file))
                     depth_image = np.load(os.path.join(depth_npy_folder, depth_file))
@@ -151,11 +144,13 @@ class VideoRecorder:
                     combined = np.hstack((color_image.copy(), color_image.copy(), color_image.copy()))
 
                     # Запись
-                    self.write_frame(color_image, depth_image, color_with_mask,
-                                    depth_colormap, cleaned_depth_colormap, combined)
+                    self.write_frame(color_image, depth_image, color_image.copy(),
+                                    color_image.copy(), color_image.copy(), combined)
 
                 except Exception as e:
                     print(f"Ошибка обработки кадра {rgb_file}: {e}")
+
+            return self.stop_recording(return_files=True)
 
     
     @staticmethod
