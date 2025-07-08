@@ -33,6 +33,7 @@ class FrameProcessor:
         
         self.frame_count = 0
         self.enable_tracking = True  # Флаг для включения/выключения трекинга
+        self.completed_objects = []
         
 
     def process_frame(self, color_image, depth_image, camera_pose=None):
@@ -55,16 +56,28 @@ class FrameProcessor:
         # Трекинг багажа (если включен)
         tracked_objects = {}
         if self.enable_tracking:
-
+            # Сначала проверяем объекты на финальную обработку
+            finalized_objects = self.tracker.get_and_clear_finalized_objects()
+            # Обрабатываем объекты перед обновлением трекера
+            for obj in finalized_objects:
+                self._finalize_object(obj)
+            
+            # Обновляем трекер
             filtered_detections = non_max_suppression_bbox(detection_results['baggage_detections'])
             tracked_objects = self.tracker.update(filtered_detections)
             
-            # Сохранение наблюдений для 3D реконструкции
-            if self.reconstructor is not None:
-                self._collect_observations(
-                    color_image, depth_image, tracked_objects, 
-                    timestamp, camera_pose
-                )
+            # Сохраняем depth маски для активных объектов
+            for obj_id, tracked_obj in tracked_objects.items():
+                if tracked_obj.mask is not None:
+                    # Извлекаем значения глубины под маской
+                    depth_values = depth_image[tracked_obj.mask > 0]
+                    if len(depth_values) > 0:
+                        tracked_obj.add_depth_observation(
+                            tracked_obj.mask, 
+                            depth_values,
+                            timestamp
+                        )
+        
         
         # Визуализация масок на RGB
         if self.enable_tracking and tracked_objects:
@@ -183,33 +196,6 @@ class FrameProcessor:
         color_bgr = cv2.cvtColor(color_hsv, cv2.COLOR_HSV2BGR)[0][0]
         return tuple(int(c) for c in color_bgr)
     
-    def _collect_observations(self, color_image, depth_image, tracked_objects, 
-                            timestamp, camera_pose):
-        """Сбор наблюдений для 3D реконструкции"""
-        for obj_id, tracked_obj in tracked_objects.items():
-            # Вырезаем область багажа
-            x1, y1, x2, y2 = tracked_obj.bbox.astype(int)
-            
-            # Проверяем границы
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(color_image.shape[1], x2), min(color_image.shape[0], y2)
-            
-            if x2 > x1 and y2 > y1:  # Проверка валидности области
-                rgb_crop = color_image[y1:y2, x1:x2]
-                depth_crop = depth_image[y1:y2, x1:x2]
-                mask_crop = tracked_obj.mask[y1:y2, x1:x2]
-                
-                # Добавляем наблюдение
-                if len(tracked_obj.rgb_crops) < Config.MAX_OBSERVATIONS:
-                    tracked_obj.add_observation(
-                        rgb_crop, depth_crop, mask_crop, 
-                        timestamp, camera_pose
-                    )
-                
-                # Попытка реконструкции если достаточно наблюдений
-                if len(tracked_obj.rgb_crops) >= Config.MIN_OBSERVATIONS:
-                    if tracked_obj.point_cloud is None or self.frame_count % 30 == 0:
-                        self.reconstructor.reconstruct_from_observations(tracked_obj)
     
     def set_tracking_enabled(self, enabled):
         """Включение/выключение трекинга"""
@@ -221,31 +207,141 @@ class FrameProcessor:
                 max_distance=Config.MAX_DISTANCE
             )
     
-    def export_point_clouds(self):
-        """Экспорт всех облаков точек"""
-        if not self.reconstructor:
-            return []
+    def _finalize_object(self, tracked_obj):
+        """Финальная обработка объекта перед удалением"""
+        if len(tracked_obj.depth_masks) < Config.MIN_OBSERVATIONS:
+            print(f"Object {tracked_obj.id}: недостаточно масок ({len(tracked_obj.depth_masks)})")
+            return
+        
+        # Отбираем максимально разные маски
+        selected_indices = self._select_diverse_masks(tracked_obj.depth_masks)
+        tracked_obj.selected_masks = [tracked_obj.depth_masks[i] for i in selected_indices]
+        
+        # Восстанавливаем облако точек
+        if self.reconstructor:
+            # Используем ICP для лучшего выравнивания
+            point_cloud = self.reconstructor.reconstruct_from_masks(
+                tracked_obj.selected_masks, 
+                with_icp=True
+            )
             
-        exported = []
-        for obj_id, tracked_obj in self.tracker.tracked_objects.items():
-            if tracked_obj.point_cloud is not None:
-                filename = f"{Config.POINT_CLOUDS_DIR}/baggage_{tracked_obj.unique_id}.ply"
-                self.reconstructor.save_point_cloud(tracked_obj, filename)
+            # Опционально создаем mesh
+            mesh = None
+            if len(point_cloud) > 1000:  # Достаточно точек для меша
+                try:
+                    mesh = self.reconstructor.create_mesh(point_cloud)
+                except:
+                    print(f"Object {tracked_obj.id}: не удалось создать mesh")
+            
+            # Сохраняем результат
+            self.completed_objects.append({
+                'id': tracked_obj.id,
+                'unique_id': tracked_obj.unique_id,
+                'point_cloud': point_cloud,
+                'mesh': mesh,
+                'rgb_image': tracked_obj.rgb_crops[-1] if tracked_obj.rgb_crops else None,
+                'all_masks': tracked_obj.depth_masks,
+                'selected_masks': tracked_obj.selected_masks,
+                'timestamp': datetime.now()
+            })
+            
+
+            print(f"Object {tracked_obj.id}: создано облако из {len(point_cloud)} точек на основании {len(tracked_obj.depth_masks)} масок")
+    
+    def _select_diverse_masks(self, depth_masks, min_masks=Config.MIN_OBSERVATIONS, max_masks=Config.MAX_OBSERVATIONS):
+        """Отбор максимально разных масок"""
+        n_masks = len(depth_masks)
+        if n_masks <= min_masks:
+            return list(range(n_masks))
+        
+        # Используем позиции центроидов для оценки разнообразия
+        selected = [0, n_masks - 1]  # Первая и последняя
+        
+        # Добавляем маски с максимальным расстоянием до уже выбранных
+        while len(selected) < min(max_masks, n_masks):
+            max_dist = -1
+            best_idx = -1
+            
+            for i in range(n_masks):
+                if i in selected:
+                    continue
                 
-                # Попробуем создать mesh
-                mesh = self.reconstructor.create_mesh(tracked_obj.point_cloud)
-                mesh_filename = None
-                if mesh is not None:
-                    mesh_filename = f"{Config.POINT_CLOUDS_DIR}/baggage_{tracked_obj.unique_id}_mesh.ply"
-                    self.reconstructor.save_mesh(mesh, mesh_filename)
+                # Минимальное расстояние до выбранных масок
+                min_dist_to_selected = float('inf')
+                for j in selected:
+                    if depth_masks[i]['centroid'] is not None and depth_masks[j]['centroid'] is not None:
+                        dist = np.linalg.norm(
+                            depth_masks[i]['centroid'] - depth_masks[j]['centroid']
+                        )
+                        min_dist_to_selected = min(min_dist_to_selected, dist)
                 
-                exported.append({
-                    'id': obj_id,
-                    'unique_id': tracked_obj.unique_id,
-                    'pointcloud_file': filename,
-                    'mesh_file': mesh_filename,
-                    'points': len(tracked_obj.point_cloud.points),
-                    'observations': len(tracked_obj.rgb_crops)
-                })
-        return exported
+                if min_dist_to_selected > max_dist:
+                    max_dist = min_dist_to_selected
+                    best_idx = i
+            
+            if best_idx >= 0:
+                selected.append(best_idx)
+            else:
+                break
+        
+        return sorted(selected)
+    
+    def _reconstruct_from_masks(self, tracked_obj):
+        """Восстановление облака точек из выбранных масок"""
+        all_points = []
+        
+        for mask_data in tracked_obj.selected_masks:
+            mask = mask_data['mask']
+            depth_values = mask_data['depth_values']
+            
+            # Получаем координаты пикселей маски
+            y_coords, x_coords = np.where(mask > 0)
+            
+            if len(x_coords) == 0:
+                continue
+            
+            # Конвертируем в 3D точки
+            z = depth_values * self.camera_intrinsics['depth_scale']
+            x = (x_coords - self.camera_intrinsics['cx']) * z / self.camera_intrinsics['fx']
+            y = (y_coords - self.camera_intrinsics['cy']) * z / self.camera_intrinsics['fy']
+            
+            points = np.stack([x, y, z], axis=1)
+            valid = z > 0
+            all_points.extend(points[valid])
+        
+        return np.array(all_points)
+    
+    @property
+    def camera_intrinsics(self):
+        """Получение параметров камеры"""
+        if self.reconstructor:
+            return self.reconstructor.intrinsics
+        return None
+    
+    def get_completed_objects(self):
+        """Получение завершенных объектов с облаками точек"""
+        return self.completed_objects
+    
+    def save_debug_data(self, output_dir="debug_masks"):
+        """Сохранение данных для дебага"""
+        import os
+        os.makedirs(output_dir, exist_ok=True)
+        
+        for i, obj_data in enumerate(self.completed_objects):
+            obj_dir = os.path.join(output_dir, f"object_{obj_data['id']}_{obj_data['unique_id'][:8]}")
+            os.makedirs(obj_dir, exist_ok=True)
+            
+            # Сохраняем RGB изображение
+            if obj_data['rgb_image'] is not None:
+                cv2.imwrite(os.path.join(obj_dir, "rgb.jpg"), obj_data['rgb_image'])
+            
+            # Сохраняем выбранные маски
+            for j, mask_data in enumerate(obj_data['selected_masks']):
+                mask_vis = (mask_data['mask'] * 255).astype(np.uint8)
+                cv2.imwrite(os.path.join(obj_dir, f"mask_{j}.png"), mask_vis)
+            
+            # Сохраняем облако точек
+            if len(obj_data['point_cloud']) > 0:
+                np.save(os.path.join(obj_dir, "point_cloud.npy"), obj_data['point_cloud'])
+
 

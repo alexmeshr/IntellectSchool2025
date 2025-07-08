@@ -6,6 +6,7 @@ import uuid
 class BaggageTracker:
     def __init__(self, max_disappeared=10, max_distance=50):
         self.tracked_objects = {}
+        self.objects_to_finalize = []
         self.disappeared = defaultdict(int)
         self.max_disappeared = max_disappeared
         self.max_distance = max_distance
@@ -210,11 +211,20 @@ class BaggageTracker:
         self.next_id += 1
     
     def _deregister(self, obj_id):
-        """Удаление объекта из трекинга"""
+        """Подготовка объекта к удалению"""
         if obj_id in self.tracked_objects:
+            # Сохраняем объект для финальной обработки
+            self.objects_to_finalize.append(self.tracked_objects[obj_id])
+            # Теперь удаляем
             del self.tracked_objects[obj_id]
         if obj_id in self.disappeared:
             del self.disappeared[obj_id]
+
+    def get_and_clear_finalized_objects(self):
+        """Получить и очистить список объектов для финализации"""
+        objects = self.objects_to_finalize.copy()
+        self.objects_to_finalize.clear()
+        return objects                   
     
     def _update_object(self, obj_id, detection):
         """Обновление существующего объекта"""
@@ -258,6 +268,9 @@ class TrackedObject:
         self.timestamps = []
         
         # Параметры для 3D реконструкции
+        self.depth_masks = []  # Список кортежей (mask, depth_values, timestamp)
+        self.selected_masks = []  # Отобранные маски для реконструкции
+        self.trigger_final_processing = False
         self.point_cloud = None
         self.mesh = None
         
@@ -285,12 +298,12 @@ class TrackedObject:
             self.confidence = detection['confidence']
         if 'area' in detection:
             self.area = detection['area']
-    
-    def add_observation(self, rgb_crop, depth_crop, mask, timestamp, camera_pose=None):
-        """Добавление наблюдения для 3D реконструкции"""
-        self.rgb_crops.append(rgb_crop)
-        self.depth_crops.append(depth_crop)
-        self.masks_history.append(mask)
-        self.timestamps.append(timestamp)
-        if camera_pose is not None:
-            self.camera_poses.append(camera_pose)
+
+    def add_depth_observation(self, mask, depth_values, timestamp):
+        """Добавление наблюдения depth маски"""
+        self.depth_masks.append({
+            'mask': mask.copy(),
+            'depth_values': depth_values.copy(),
+            'timestamp': timestamp,
+            'centroid': self.centroid.copy() if self.centroid is not None else None
+        })
