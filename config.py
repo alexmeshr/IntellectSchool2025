@@ -27,8 +27,8 @@ class Config:
     
     # Параметры 3D реконструкции
     MIN_OBSERVATIONS = 5  # Минимум наблюдений для реконструкции
-    MAX_OBSERVATIONS = 10  # Максимум для оптимизации памяти
-
+    MAX_OBSERVATIONS = 15  # Максимум для оптимизации памяти
+    POINT_CLOUD_STRIDE = 1
     
     # Пути
     OUTPUT_DIR = "recordings"
@@ -38,6 +38,7 @@ class Config:
     # Настройки записи
     VIDEO_CODEC = 'mp4v'
     JPEG_QUALITY = 70
+    ORIENTATION_VERTICAL = True 
 
     CAMERA_INTRINSICS = {
                 'fx': 390.4425964355469, 
