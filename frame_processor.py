@@ -8,6 +8,7 @@ from baggage_tracker import BaggageTracker
 from point_cloud_reconstructor import PointCloudReconstructor
 from depth_processor import DepthProcessor
 from config import Config
+from dimension_estimator import DimensionEstimator
 
 def non_max_suppression_bbox(detections, iou_threshold=0.5):
         boxes = [d['bbox'] for d in detections]
@@ -27,9 +28,9 @@ class FrameProcessor:
         )
         
         # Инициализируем реконструктор только если переданы параметры камеры
-        self.reconstructor = None
+        self.dimension_estimator = None
         if camera_intrinsics is not None:
-            self.reconstructor = PointCloudReconstructor(camera_intrinsics)
+            self.dimension_estimator = DimensionEstimator(camera_intrinsics)
         
         self.frame_count = 0
         self.enable_tracking = True  # Флаг для включения/выключения трекинга
@@ -71,7 +72,7 @@ class FrameProcessor:
                 if tracked_obj.mask is not None:
                     # Извлекаем значения глубины под маской
                     depth_values = depth_image[tracked_obj.mask > 0]
-                    rgb_values = color_image[tracked_obj.mask > 0]
+                    rgb_values = color_image#[tracked_obj.mask > 0]
                     if len(depth_values) > 0:
                         tracked_obj.add_depth_observation(
                             tracked_obj.mask, 
@@ -161,28 +162,6 @@ class FrameProcessor:
             )
             cv2.drawContours(color_with_mask, contours, -1, color, 2)
             
-            # Bbox
-            x1, y1, x2, y2 = tracked_obj.bbox.astype(int)
-            cv2.rectangle(color_with_mask, (x1, y1), (x2, y2), color, 2)
-            
-            # Подпись с ID и статусом
-            label = f"ID:{obj_id}"
-            if self.reconstructor and tracked_obj.point_cloud is not None:
-                label += f" [3D:{len(tracked_obj.point_cloud.points)}pts]"
-            elif hasattr(tracked_obj, 'rgb_crops'):
-                label += f" [{len(tracked_obj.rgb_crops)}obs]"
-            
-            # Фон для текста
-            (text_width, text_height), _ = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2
-            )
-            cv2.rectangle(color_with_mask, 
-                         (x1, y1 - text_height - 10), 
-                         (x1 + text_width, y1 - 5), 
-                         color, -1)
-            cv2.putText(color_with_mask, label, (x1, y1-8), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            
             # Центроид
             #if tracked_obj.centroid:
             #    cv2.circle(color_with_mask, tracked_obj.centroid, 4, color, -1)
@@ -215,103 +194,35 @@ class FrameProcessor:
             print(f"Object {tracked_obj.id}: недостаточно масок ({len(tracked_obj.depth_masks)})")
             return
         
-        # Отбираем максимально разные маски
-        selected_indices = self._select_diverse_masks(tracked_obj.depth_masks)
-        tracked_obj.selected_masks = [tracked_obj.depth_masks[i] for i in selected_indices]
-        
-        # Восстанавливаем облако точек
-        if self.reconstructor:
-            # Используем ICP для лучшего выравнивания
-            point_cloud = self.reconstructor.reconstruct_from_masks(
-                tracked_obj.selected_masks, 
-                with_icp=True
-            )
+        # Используем DimensionEstimator для оценки габаритов
+        if self.dimension_estimator:
+            result = self.dimension_estimator.estimate_dimensions(tracked_obj.depth_masks)
             
-            # Опционально создаем mesh
-            mesh = None
-            #if len(point_cloud) > 1000:  # Достаточно точек для меша
-            #    try:
-            #        mesh = self.reconstructor.create_mesh(point_cloud)
-            #    except:
-            #        print(f"Object {tracked_obj.id}: не удалось создать mesh")
+            if result is None:
+                print(f"Object {tracked_obj.id}: не удалось оценить габариты")
+                return
             
             # Сохраняем результат
             self.completed_objects.append({
                 'id': tracked_obj.id,
                 'unique_id': tracked_obj.unique_id,
-                'point_cloud': point_cloud,
-                'mesh': mesh,
-                'rgb_images': tracked_obj.rgb_crops,
                 'all_masks': tracked_obj.depth_masks,
-                'selected_masks': tracked_obj.selected_masks,
+                'dimensions': result['dimensions'],  # [длина, ширина, высота] в метрах
+                'volume': result['volume'],
+                'point_cloud': result['point_cloud'],
+                'centroid': result['centroid'],
+                'rotation_matrix': result['rotation_matrix'],
+                'best_frame_index': result['frame_index'],
+                'num_points': result['num_points'],
+                'rgb_image': result['rgb_image'],
                 'timestamp': datetime.now()
             })
             
+            print(f"Object {tracked_obj.id}: габариты {result['dimensions'][0]:.3f}x{result['dimensions'][1]:.3f}x{result['dimensions'][2]:.3f} м, "
+                f"объем {result['volume']:.4f} м³, {result['num_points']} точек")
+        else:
+            print(f"Object {tracked_obj.id}: DimensionEstimator не инициализирован")
 
-            print(f"Object {tracked_obj.id}: создано облако из {len(point_cloud)} точек на основании {len(tracked_obj.depth_masks)} масок")
-    
-    def _select_diverse_masks(self, depth_masks, min_masks=Config.MIN_OBSERVATIONS, max_masks=Config.MAX_OBSERVATIONS):
-        """Отбор максимально разных масок"""
-        n_masks = len(depth_masks)
-        if n_masks <= min_masks:
-            return list(range(n_masks))
-        
-        # Используем позиции центроидов для оценки разнообразия
-        selected = [0, n_masks - 1]  # Первая и последняя
-        
-        # Добавляем маски с максимальным расстоянием до уже выбранных
-        while len(selected) < min(max_masks, n_masks):
-            max_dist = -1
-            best_idx = -1
-            
-            for i in range(n_masks):
-                if i in selected:
-                    continue
-                
-                # Минимальное расстояние до выбранных масок
-                min_dist_to_selected = float('inf')
-                for j in selected:
-                    if depth_masks[i]['centroid'] is not None and depth_masks[j]['centroid'] is not None:
-                        dist = np.linalg.norm(
-                            depth_masks[i]['centroid'] - depth_masks[j]['centroid']
-                        )
-                        min_dist_to_selected = min(min_dist_to_selected, dist)
-                
-                if min_dist_to_selected > max_dist:
-                    max_dist = min_dist_to_selected
-                    best_idx = i
-            
-            if best_idx >= 0:
-                selected.append(best_idx)
-            else:
-                break
-        
-        return sorted(selected)
-    
-    def _reconstruct_from_masks(self, tracked_obj):
-        """Восстановление облака точек из выбранных масок"""
-        all_points = []
-        
-        for mask_data in tracked_obj.selected_masks:
-            mask = mask_data['mask']
-            depth_values = mask_data['depth_values']
-            
-            # Получаем координаты пикселей маски
-            y_coords, x_coords = np.where(mask > 0)
-            
-            if len(x_coords) == 0:
-                continue
-            
-            # Конвертируем в 3D точки
-            z = depth_values * self.camera_intrinsics['depth_scale']
-            x = (x_coords - self.camera_intrinsics['cx']) * z / self.camera_intrinsics['fx']
-            y = (y_coords - self.camera_intrinsics['cy']) * z / self.camera_intrinsics['fy']
-            
-            points = np.stack([x, y, z], axis=1)
-            valid = z > 0
-            all_points.extend(points[valid])
-        
-        return np.array(all_points)
     
     @property
     def camera_intrinsics(self):
