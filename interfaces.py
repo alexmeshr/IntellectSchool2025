@@ -2,21 +2,23 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
+
 class ICameraInterface(ABC):
     @abstractmethod
     def get_frames(self):
         """Получить RGB и depth кадры"""
         pass
-    
+
     @abstractmethod
     def start(self):
         """Запустить камеру"""
         pass
-    
+
     @abstractmethod
     def stop(self):
         """Остановить камеру"""
         pass
+
 
 class IPersonDetector(ABC):
     @abstractmethod
