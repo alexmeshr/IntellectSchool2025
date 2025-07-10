@@ -95,7 +95,7 @@ class FrameProcessor:
             )
         
         # Объединение изображений
-        combined = np.hstack((color_with_mask, depth_colormap, cleaned_depth_colormap))
+        combined = np.hstack((color_with_mask, cleaned_depth_colormap))
         
         return {
             'color_with_mask': color_with_mask,
@@ -223,6 +223,74 @@ class FrameProcessor:
         else:
             print(f"Object {tracked_obj.id}: DimensionEstimator не инициализирован")
 
+    # Добавить в класс FrameProcessor новый метод
+    def create_object_visualization(self, obj_data, max_dims_meters):
+        """Создание изображения с визуализацией объекта и его габаритов
+        
+        Args:
+            obj_data: данные объекта
+            max_dims_meters: максимальные габариты в метрах [длина, ширина, высота]
+        """
+        # Берем RGB изображение из лучшего кадра
+        rgb_image = obj_data['rgb_image'].copy()
+        
+        # Получаем маску из лучшего кадра
+        best_frame_index = obj_data['best_frame_index']
+        mask_data = obj_data['all_masks'][best_frame_index]
+        mask = mask_data['mask']
+        
+        # Находим контур объекта
+        contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if contours:
+            # Берем самый большой контур
+            largest_contour = max(contours, key=cv2.contourArea)
+            
+            # Получаем bounding box
+            x, y, w, h = cv2.boundingRect(largest_contour)
+            
+            # Габариты в см для отображения
+            dimensions_cm = [dim * 100 for dim in obj_data['dimensions']]
+            
+            # Проверяем, помещается ли в допустимые габариты
+            fits = self._check_dimensions_fit(obj_data['dimensions'], max_dims_meters)
+            
+            # Цвет в зависимости от результата проверки
+            color = (0, 255, 0) if fits else (0, 0, 255)  # Зеленый или красный
+            
+            # Рисуем контур
+            cv2.drawContours(rgb_image, [largest_contour], -1, color, 2)
+            
+            # Подготавливаем текст с габаритами
+            text = f"{dimensions_cm[0]:.1f}x{dimensions_cm[1]:.1f}x{dimensions_cm[2]:.1f} cm"
+            
+            # Находим позицию для текста
+            text_y = y - 10 if y > 30 else y + h + 25
+            
+            # Фон для текста
+            (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            cv2.rectangle(rgb_image, 
+                        (x, text_y - text_height - 5), 
+                        (x + text_width + 10, text_y + 5), 
+                        (255, 255, 255), -1)
+            
+            # Текст с габаритами
+            cv2.putText(rgb_image, text, (x + 5, text_y), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        
+        return rgb_image
+
+    def _check_dimensions_fit(self, dims, max_dims):
+        """Проверка, помещаются ли габариты в допустимые размеры"""
+        # Сортируем оба набора размеров по убыванию
+        sorted_dims = sorted(dims, reverse=True)
+        sorted_max = sorted(max_dims, reverse=True)
+        
+        # Проверяем, что каждый размер помещается
+        for i in range(3):
+            if sorted_dims[i] > sorted_max[i]:
+                return False
+        return True
+
     
     @property
     def camera_intrinsics(self):
@@ -234,27 +302,6 @@ class FrameProcessor:
     def get_completed_objects(self):
         """Получение завершенных объектов с облаками точек"""
         return self.completed_objects
-    
-    def save_debug_data(self, output_dir="debug_masks"):
-        """Сохранение данных для дебага"""
-        import os
-        os.makedirs(output_dir, exist_ok=True)
-        
-        for i, obj_data in enumerate(self.completed_objects):
-            obj_dir = os.path.join(output_dir, f"object_{obj_data['id']}_{obj_data['unique_id'][:8]}")
-            os.makedirs(obj_dir, exist_ok=True)
-            
-            # Сохраняем RGB изображение
-            if obj_data['rgb_image'] is not None:
-                cv2.imwrite(os.path.join(obj_dir, "rgb.jpg"), obj_data['rgb_image'])
-            
-            # Сохраняем выбранные маски
-            for j, mask_data in enumerate(obj_data['selected_masks']):
-                mask_vis = (mask_data['mask'] * 255).astype(np.uint8)
-                cv2.imwrite(os.path.join(obj_dir, f"mask_{j}.png"), mask_vis)
-            
-            # Сохраняем облако точек
-            if len(obj_data['point_cloud']) > 0:
-                np.save(os.path.join(obj_dir, "point_cloud.npy"), obj_data['point_cloud'])
+
 
 

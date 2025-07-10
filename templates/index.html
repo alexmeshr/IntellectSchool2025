@@ -11,18 +11,43 @@
             padding: 20px;
             background-color: #f0f0f0;
         }
-        .container {
-            max-width: 1400px;
+        .main-container {
+            display: flex;
+            max-width: 1600px;
             margin: 0 auto;
+            gap: 20px;
+        }
+        .left-panel {
+            flex: 1;
+            min-width: 800px;
+        }
+        .right-panel {
+            width: 400px;
             background-color: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            position: sticky;
+            top: 20px;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
         h1 {
             color: #333;
             text-align: center;
             margin-bottom: 30px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
         }
         .video-container {
             text-align: center;
@@ -77,6 +102,13 @@
         .btn-refresh:hover {
             background-color: #0b7dda;
         }
+        .btn-clear {
+            background-color: #FF9800;
+            color: white;
+        }
+        .btn-clear:hover {
+            background-color: #F57C00;
+        }
         .status {
             text-align: center;
             font-size: 18px;
@@ -98,41 +130,101 @@
             50% { opacity: 0.7; }
             100% { opacity: 1; }
         }
-        .recordings {
-            margin-top: 30px;
+        .dimensions-limits {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
         }
-        .recordings h2 {
-            color: #333;
+        .dimensions-limits h3 {
+            margin-top: 0;
             margin-bottom: 15px;
+            color: #333;
         }
-        .recordings-list {
-            max-height: 300px;
-            overflow-y: auto;
+        .dimensions-inputs {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .dimension-input {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .dimension-input label {
+            font-weight: bold;
+            color: #666;
+        }
+        .dimension-input input {
+            width: 60px;
+            padding: 5px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            padding: 10px;
+            text-align: center;
         }
-        .recording-item {
+        .dimension-input span {
+            color: #666;
+        }
+        .objects-list {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .object-item {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        .object-item.valid {
+            border-color: #4CAF50;
+        }
+        .object-item.invalid {
+            border-color: #f44336;
+        }
+        .object-image-container {
+            position: relative;
+            width: 100%;
+            background-color: #f0f0f0;
+        }
+        .object-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .object-info {
             padding: 10px;
-            border-bottom: 1px solid #eee;
+            background-color: white;
         }
-        .recording-item:last-child {
-            border-bottom: none;
-        }
-        .recording-info {
-            flex: 1;
-        }
-        .recording-name {
+        .object-id {
             font-weight: bold;
             color: #333;
+            margin-bottom: 5px;
         }
-        .recording-details {
+        .object-dimensions {
             font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .object-dimensions.valid {
+            color: #4CAF50;
+        }
+        .object-dimensions.invalid {
+            color: #f44336;
+        }
+        .object-volume {
+            font-size: 12px;
             color: #666;
+        }
+        .object-timestamp {
+            font-size: 11px;
+            color: #999;
             margin-top: 5px;
+        }
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 40px 20px;
         }
         .checkbox-group {
             display: flex;
@@ -144,9 +236,6 @@
             display: flex;
             align-items: center;
             gap: 5px;
-            cursor: pointer;
-        }
-        .checkbox-group input[type="checkbox"] {
             cursor: pointer;
         }
         .info-panel {
@@ -183,76 +272,109 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Система определения габаритов багажа</h1>
-        
-        <div class="video-container">
-            <img id="videoFeed" src="/video_feed" alt="Video Stream">
-        </div>
-        
-        <div id="status" class="status idle">
-            <span id="statusText">Система готова</span>
-        </div>
-        
-        <div class="checkbox-group">
-            <label>
-                <input type="checkbox" id="separateFiles" name="separateFiles">
-                <span>Записывать отдельные файлы (RGB, Depth, Cleaned)</span>
-            </label>
-            <label>
-                <input type="checkbox" id="saveRaw" name="saveRaw" checked>
-                <span>Сохранять исходные данные</span>
-            </label>
-        </div>
-        
-        <div class="controls">
-            <div class="control-group">
-                <button id="startBtn" class="btn-start" onclick="startRecording()">
-                    Начать запись
-                </button>
-                <button id="stopBtn" class="btn-stop" onclick="stopRecording()" disabled>
-                    Остановить запись
-                </button>
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="container">
+                <h1>Система определения габаритов багажа</h1>
+                
+                <div class="video-container">
+                    <img id="videoFeed" src="/video_feed" alt="Video Stream">
+                </div>
+                
+                <div id="status" class="status idle">
+                    <span id="statusText">Система готова</span>
+                </div>
+                
+                <div class="dimensions-limits">
+                    <h3>Максимально допустимые габариты</h3>
+                    <div class="dimensions-inputs">
+                        <div class="dimension-input">
+                            <label>Длина:</label>
+                            <input type="number" id="maxLength" value="55" min="1" max="200">
+                            <span>см</span>
+                        </div>
+                        <div class="dimension-input">
+                            <label>Ширина:</label>
+                            <input type="number" id="maxWidth" value="40" min="1" max="200">
+                            <span>см</span>
+                        </div>
+                        <div class="dimension-input">
+                            <label>Высота:</label>
+                            <input type="number" id="maxHeight" value="20" min="1" max="200">
+                            <span>см</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="separateFiles" name="separateFiles">
+                        <span>Записывать отдельные файлы (RGB, Depth, Cleaned)</span>
+                    </label>
+                    <label>
+                        <input type="checkbox" id="saveRaw" name="saveRaw" checked>
+                        <span>Сохранять исходные данные</span>
+                    </label>
+                </div>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <button id="startBtn" class="btn-start" onclick="startRecording()">
+                            Начать запись
+                        </button>
+                        <button id="stopBtn" class="btn-stop" onclick="stopRecording()" disabled>
+                            Остановить запись
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button class="btn-refresh" onclick="refreshRecordings()">
+                            Обновить список записей
+                        </button>
+                        <button class="btn-clear" onclick="clearObjects()">
+                            Очистить объекты
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="info-panel">
+                    <h3>Информация о системе</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Разрешение RGB</div>
+                            <div class="info-value">640x480</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Разрешение Depth</div>
+                            <div class="info-value">640x480</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">FPS</div>
+                            <div class="info-value">15</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Модель YOLO</div>
+                            <div class="info-value">YOLOv8l-seg</div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="control-group">
-                <button class="btn-refresh" onclick="refreshRecordings()">
-                    Обновить список записей
-                </button>
-            </div>
         </div>
         
-        <div class="info-panel">
-            <h3>Информация о системе</h3>
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="info-label">Разрешение RGB</div>
-                    <div class="info-value">640x480</div>
+        <div class="right-panel">
+            <h2>Обнаруженные объекты</h2>
+            <div id="objectsList" class="objects-list">
+                <div class="empty-state">
+                    <p>Объекты пока не обнаружены</p>
+                    <p style="font-size: 14px;">Они появятся здесь после прохождения через кадр</p>
                 </div>
-                <div class="info-item">
-                    <div class="info-label">Разрешение Depth</div>
-                    <div class="info-value">640x480</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">FPS</div>
-                    <div class="info-value">15</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-label">Модель YOLO</div>
-                    <div class="info-value">YOLOv8l-seg</div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="recordings">
-            <h2>Записанные файлы</h2>
-            <div id="recordingsList" class="recordings-list">
-                <p style="text-align: center; color: #666;">Загрузка...</p>
             </div>
         </div>
     </div>
 
     <script>
         let isRecording = false;
+        let processedObjects = [];
+        let lastObjectId = -1;
 
         function updateStatus() {
             fetch('/recording_status')
@@ -300,9 +422,8 @@
             .then(data => {
                 if (data.success) {
                     updateStatus();
-                    showNotification(data.message, 'success');
                 } else {
-                    showNotification(data.message, 'error');
+                    alert(data.message);
                 }
             });
         }
@@ -316,48 +437,134 @@
                 if (data.success) {
                     updateStatus();
                     refreshRecordings();
-                    showNotification(data.message, 'success');
-                } else {
-                    showNotification(data.message, 'error');
                 }
             });
         }
 
         function refreshRecordings() {
-            fetch('/recordings')
-                .then(response => response.json())
-                .then(data => {
-                    const listEl = document.getElementById('recordingsList');
-                    
-                    if (data.files.length === 0) {
-                        listEl.innerHTML = '<p style="text-align: center; color: #666;">Нет записанных файлов</p>';
-                    } else {
-                        listEl.innerHTML = data.files.map(file => `
-                            <div class="recording-item">
-                                <div class="recording-info">
-                                    <div class="recording-name">${file.name}</div>
-                                    <div class="recording-details">
-                                        ${file.path} | ${file.size} | ${file.date}
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                });
+            // Эта функция остается для совместимости
         }
 
-        function showNotification(message, type) {
-            // Простое уведомление через alert
-            // В реальном приложении можно использовать более красивые уведомления
-            alert(message);
+
+        function getMaxDimensions() {
+            return {
+                length: parseFloat(document.getElementById('maxLength').value) / 100, // в метры
+                width: parseFloat(document.getElementById('maxWidth').value) / 100,
+                height: parseFloat(document.getElementById('maxHeight').value) / 100
+            };
         }
+
+        function checkDimensionsFit(dimensions, maxDims) {
+            // Проверяем, можно ли вместить объект в допустимые габариты
+            // с учетом возможности поворота
+            const objDims = [...dimensions].sort((a, b) => b - a);
+            const maxDimsArray = [maxDims.length, maxDims.width, maxDims.height].sort((a, b) => b - a);
+            
+            for (let i = 0; i < 3; i++) {
+                if (objDims[i] > maxDimsArray[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function updateObjectsList() {
+            const listEl = document.getElementById('objectsList');
+            
+            if (processedObjects.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-state">
+                        <p>Объекты пока не обнаружены</p>
+                        <p style="font-size: 14px;">Они появятся здесь после прохождения через кадр</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const maxDims = getMaxDimensions();
+            
+            listEl.innerHTML = processedObjects.map(obj => {
+                const dims = obj.dimensions;
+                const isValid = checkDimensionsFit(dims, maxDims);
+                const dimCm = dims.map(d => (d * 100).toFixed(1));
+                
+                return `
+                    <div class="object-item ${isValid ? 'valid' : 'invalid'}">
+                        <div class="object-image-container">
+                            <img class="object-image" src="${obj.image_url}" alt="Object ${obj.id}">
+                        </div>
+                        <div class="object-info">
+                            <div class="object-id">Объект #${obj.id}</div>
+                            <div class="object-dimensions ${isValid ? 'valid' : 'invalid'}">
+                                ${dimCm[0]} × ${dimCm[1]} × ${dimCm[2]} см
+                            </div>
+                            <div class="object-volume">
+                                Объем: ${(obj.volume * 1000).toFixed(1)} л
+                            </div>
+                            <div class="object-timestamp">
+                                ${new Date(obj.timestamp).toLocaleTimeString()}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function fetchProcessedObjects() {
+            // Получаем текущие ограничения
+            const maxLength = document.getElementById('maxLength').value;
+            const maxWidth = document.getElementById('maxWidth').value;
+            const maxHeight = document.getElementById('maxHeight').value;
+            
+            // Добавляем параметры в запрос
+            const params = new URLSearchParams({
+                max_length: maxLength,
+                max_width: maxWidth,
+                max_height: maxHeight
+            });
+            
+            fetch(`/processed_objects?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.objects && data.objects.length > 0) {
+                        // Добавляем новые объекты в список
+                        processedObjects.push(...data.objects);
+                        updateObjectsList();
+                    }
+                })
+                .catch(error => console.error('Error fetching objects:', error));
+        }
+
+        // Заменить функцию clearObjects
+        function clearObjects() {
+            if (confirm('Очистить список обнаруженных объектов?')) {
+                fetch('/clear_objects', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        processedObjects = [];
+                        updateObjectsList();
+                    }
+                });
+            }
+        }
+
+        // Обновление при изменении лимитов
+        document.getElementById('maxLength').addEventListener('change', updateObjectsList);
+        document.getElementById('maxWidth').addEventListener('change', updateObjectsList);
+        document.getElementById('maxHeight').addEventListener('change', updateObjectsList);
 
         // Обновление статуса каждые 2 секунды
         setInterval(updateStatus, 2000);
+        
+        // Проверка новых объектов каждую секунду
+        setInterval(fetchProcessedObjects, 1000);
 
         // Начальная загрузка
         updateStatus();
-        refreshRecordings();
+        fetchProcessedObjects();
     </script>
 </body>
 </html>

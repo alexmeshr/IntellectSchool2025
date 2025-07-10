@@ -29,6 +29,8 @@ class Config:
     MIN_OBSERVATIONS = 5  # Минимум наблюдений для реконструкции
     MAX_OBSERVATIONS = 15  # Максимум для оптимизации памяти
     POINT_CLOUD_STRIDE = 1
+    TOP_N_ESTIMATIONS = 6
+    OUTLIER_THRESHOLD = 2
     
     # Пути
     OUTPUT_DIR = "recordings"
@@ -41,12 +43,13 @@ class Config:
     ORIENTATION_VERTICAL = True 
 
     CAMERA_INTRINSICS = {
-                'fx': 390.4425964355469, 
-                'fy': 390.4425964355469,
-                'cx': 320.0,
-                'cy': 240.0,
-                'depth_scale': 0.001
-            }
+        'fx': 390.443,      # фокусное расстояние по X
+        'fy': 390.443,      # фокусное расстояние по Y
+        'cx': 319.957,      # главная точка X (ppx в RealSense)
+        'cy': 243.082,      # главная точка Y (ppy в RealSense)
+        'depth_scale': 0.001 # масштаб глубины (метры)
+    }
+    LASER_TRESHOLD = 2
     
     @staticmethod
     def ensure_directories():

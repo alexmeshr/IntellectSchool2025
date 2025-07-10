@@ -11,13 +11,13 @@ class CameraManager:
         self.camera = camera
             
         
-        self.frame_processor = FrameProcessor(camera_intrinsics)
+        self._frame_processor = FrameProcessor(camera_intrinsics)
         self.video_recorder = VideoRecorder()
         self.running = False
         
     def export_tracked_objects(self):
         """Экспорт облаков точек отслеживаемых объектов"""
-        return self.frame_processor.export_point_clouds()
+        return self._frame_processor.export_point_clouds()
         
     def start(self):
         """Запуск системы"""
@@ -43,7 +43,7 @@ class CameraManager:
             return None
         
         # Обработка кадров
-        results = self.frame_processor.process_frame(color_image, depth_image)
+        results = self._frame_processor.process_frame(color_image, depth_image)
         
         # Запись если включена
         self.video_recorder.write_frame(
@@ -71,6 +71,10 @@ class CameraManager:
     @property
     def record_separate(self):
         return getattr(self.video_recorder, 'record_separate', False)
+
+    @property
+    def frame_processor(self):
+        return self._frame_processor
     
     def get_recordings_list(self):
         return VideoRecorder.get_recordings_list()

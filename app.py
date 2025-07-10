@@ -7,6 +7,8 @@ from realsense_camera import RealSenseCamera
 from mock_camera import MockCamera
 from config import Config
 import os
+import base64
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -104,6 +106,56 @@ def main(use_mock=False, rgb_folder=None, depth_folder=None):
     finally:
         if camera_manager:
             camera_manager.stop()
+
+@app.route('/processed_objects')
+def get_processed_objects():
+    global camera_manager
+    if camera_manager and camera_manager.frame_processor:
+        # Получаем ограничения габаритов из параметров запроса
+        max_length = float(request.args.get('max_length', 55)) / 100  # переводим в метры
+        max_width = float(request.args.get('max_width', 40)) / 100
+        max_height = float(request.args.get('max_height', 20)) / 100
+        max_dims = [max_length, max_width, max_height]
+        
+        # Получаем завершенные объекты
+        completed_objects = camera_manager.frame_processor.get_completed_objects()
+        
+        # Подготавливаем данные для отправки
+        objects_data = []
+        for obj in completed_objects:
+            # Создаем изображение с визуализацией, передавая ограничения
+            annotated_image = camera_manager.frame_processor.create_object_visualization(
+                obj, max_dims
+            )
+            
+            # Конвертируем в base64
+            _, buffer = cv2.imencode('.jpg', annotated_image)
+            img_base64 = base64.b64encode(buffer).decode('utf-8')
+            
+            objects_data.append({
+                'id': obj['id'],
+                'dimensions': obj['dimensions'].tolist(),  # [длина, ширина, высота] в метрах
+                'volume': float(obj['volume']),
+                'timestamp': obj['timestamp'].isoformat(),
+                'image_url': f'data:image/jpeg;base64,{img_base64}'
+            })
+        
+        # Очищаем список после отправки
+        camera_manager.frame_processor.completed_objects.clear()
+        
+        return jsonify({'objects': objects_data})
+    
+    return jsonify({'objects': []})
+
+# Добавить endpoint для очистки объектов
+@app.route('/clear_objects', methods=['POST'])
+def clear_objects():
+    global camera_manager
+    if camera_manager and camera_manager.frame_processor:
+        camera_manager.frame_processor.completed_objects.clear()
+        return jsonify({'success': True})
+    return jsonify({'success': False})
+
 
 if __name__ == '__main__':
     import argparse
