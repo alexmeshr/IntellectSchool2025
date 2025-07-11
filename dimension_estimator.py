@@ -177,7 +177,7 @@ class DimensionEstimator:
             # Добавляем небольшой шум к Z координатам
             points = points.copy()
             points[:, 2] += np.random.normal(0, 0.002, len(points))
-            
+
         # Создаем облако точек Open3D
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
