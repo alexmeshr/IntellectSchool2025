@@ -125,24 +125,59 @@ class DimensionEstimator:
         return points
 
     def remove_outliers(self, points, nb_neighbors=20, std_ratio=2.0):
-        """Удаление выбросов из облака точек"""
+        """Удаление мелких кластеров, оставляем только главный"""
         if len(points) < nb_neighbors:
             return points
-
+        
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
-
-        # Статистическое удаление выбросов
-        pcd_clean, ind = pcd.remove_statistical_outlier(
-            nb_neighbors=nb_neighbors, std_ratio=std_ratio)
-
-        return np.asarray(pcd_clean.points)
+        
+        # 1. Сразу прореживаем для ускорения и уменьшения плотности
+        voxel_size = 0.02  # 1 см - достаточно для габаритов
+        pcd = pcd.voxel_down_sample(voxel_size)
+        
+        if len(pcd.points) < 10:
+            return np.asarray(pcd.points)
+        
+        # 2. DBSCAN кластеризация
+        labels = np.array(pcd.cluster_dbscan(
+            eps=0.05,  # 5 см - расстояние между точками в одном кластере
+            min_points=10,  # минимум точек в кластере
+            print_progress=False
+        ))
+        if labels.max() < 0:  # Нет кластеров
+            return np.asarray(pcd.points)
+        
+        # 3. Находим самый большой кластер
+        unique_labels, counts = np.unique(labels[labels >= 0], return_counts=True)
+        main_cluster_label = unique_labels[np.argmax(counts)]
+        
+        # 4. Оставляем только точки главного кластера
+        main_cluster_mask = labels == main_cluster_label
+        main_points = np.asarray(pcd.points)[main_cluster_mask]
+        
+        # 5. Опционально: финальная очистка главного кластера
+        if len(main_points) > nb_neighbors:
+            pcd_main = o3d.geometry.PointCloud()
+            pcd_main.points = o3d.utility.Vector3dVector(main_points)
+            pcd_clean, _ = pcd_main.remove_statistical_outlier(
+                nb_neighbors=nb_neighbors, std_ratio=std_ratio)
+            main_points = np.asarray(pcd_clean.points)
+        
+        return main_points if len(main_points) > 10 else points
 
     def compute_oriented_bbox(self, points):
         """Вычисление ориентированного bounding box через Open3D"""
         if len(points) < 10:
             return None
 
+        z_range = np.ptp(points[:, 2])  # peak-to-peak (max - min)
+    
+        if z_range < 0.001:  # Меньше 1 мм
+            # Добавляем небольшой шум к Z координатам
+            points = points.copy()
+            points[:, 2] += np.random.normal(0, 0.002, len(points))
+            
         # Создаем облако точек Open3D
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
