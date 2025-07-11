@@ -7,7 +7,6 @@ class Config:
     RGB_RESOLUTION = (640, 480)
     DEPTH_RESOLUTION = (640, 480)
     FPS = 15
-    ROTATE = True
 
     # Настройки глубины
     DEPTH_SCALE = 0.03
@@ -15,7 +14,7 @@ class Config:
     LASER_TRESHOLD = 2
 
     # Настройки YOLO
-    YOLO_MODEL = "yolov8l-seg.pt"
+    YOLO_MODEL = "yolov8m-seg.pt"
     BAG_CONFIDENCE = 0.2
     PERSON_CONFIDENCE = 0.99  # отключил людей
 
@@ -42,7 +41,7 @@ class Config:
     # Настройки записи
     VIDEO_CODEC = 'mp4v'
     JPEG_QUALITY = 70
-    ORIENTATION_VERTICAL = True
+    ORIENTATION_VERTICAL = False
 
     CAMERA_INTRINSICS = {
         'fx': 390.443,      # фокусное расстояние по X

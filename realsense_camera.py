@@ -10,7 +10,7 @@ import time
 from collections import deque
 
 class RealSenseCamera(ICameraInterface):
-    def __init__(self, apply_filters=True, buffer_size=10):
+    def __init__(self, apply_filters=True, buffer_size=100):
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.align = rs.align(rs.stream.color)

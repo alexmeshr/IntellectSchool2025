@@ -87,7 +87,7 @@ def get_recordings():
     return jsonify({'files': []})
 
 
-def main(use_mock=False, rgb_folder=None, depth_folder=None):
+def main(use_mock=False, rgb_folder=None, depth_folder=None, intrinsics_folder=None):
     """Основная функция запуска"""
     global camera_manager
 
@@ -95,7 +95,7 @@ def main(use_mock=False, rgb_folder=None, depth_folder=None):
         # Выбор камеры
         if use_mock:
             print("Использование mock камеры для тестирования")
-            camera = MockCamera(rgb_folder, depth_folder)
+            camera = MockCamera(rgb_folder, depth_folder, intrinsics_folder)
         else:
             print("Инициализация Intel RealSense...")
             camera = RealSenseCamera()
@@ -177,9 +177,11 @@ if __name__ == '__main__':
     parser.add_argument('--mock', action='store_true',
                         help='Использовать mock камеру')
     parser.add_argument('--video', type=str,
-                        help='Путь к видео для mock камеры')
+                        help='Путь к папке кадров для mock камеры')
     parser.add_argument('--depth', type=str,
-                        help='Путь к depth видео для mock камеры')
+                        help='Путь к папке depth для mock камеры')
+    parser.add_argument('--intrinsics', type=str,
+                        help='Путь к папке intrinsics для mock камеры')
 
     args = parser.parse_args()
-    main(use_mock=args.mock, rgb_folder=args.video, depth_folder=args.depth)
+    main(use_mock=args.mock, rgb_folder=args.video, depth_folder=args.depth, intrinsics_folder=args.intrinsics)
