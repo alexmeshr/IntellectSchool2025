@@ -130,6 +130,7 @@ def get_processed_objects():
 
         # Получаем завершенные объекты
         completed_objects = camera_manager.frame_processor.get_completed_objects()
+        print(f"[API] Отправка {len(completed_objects)} объектов")
 
         # Подготавливаем данные для отправки
         objects_data = []
@@ -151,9 +152,6 @@ def get_processed_objects():
                 'timestamp': obj['timestamp'].isoformat(),
                 'image_url': f'data:image/jpeg;base64,{img_base64}'
             })
-
-        # Очищаем список после отправки
-        camera_manager.frame_processor.completed_objects.clear()
 
         return jsonify({'objects': objects_data})
 

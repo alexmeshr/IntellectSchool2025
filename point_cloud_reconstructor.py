@@ -6,6 +6,7 @@ from typing import List, Dict, Optional, Tuple
 import cv2
 from scipy.spatial.distance import cdist
 from config import Config
+import pyrealsense2 as rs
 
 
 class PointCloudReconstructor:
@@ -16,24 +17,6 @@ class PointCloudReconstructor:
         """
         self.intrinsics = camera_intrinsics
 
-        # Создаем объект intrinsics для Open3D
-        self.o3d_intrinsics = o3d.camera.PinholeCameraIntrinsic()
-        if Config.ORIENTATION_VERTICAL:
-            self.o3d_intrinsics.set_intrinsics(
-                width=480, height=640,
-                fx=camera_intrinsics['fx'],
-                fy=camera_intrinsics['fy'],
-                cx=camera_intrinsics['cx'],
-                cy=camera_intrinsics['cy']
-            )
-        else:
-            self.o3d_intrinsics.set_intrinsics(
-                width=640, height=480,
-                fx=camera_intrinsics['fx'],
-                fy=camera_intrinsics['fy'],
-                cx=camera_intrinsics['cx'],
-                cy=camera_intrinsics['cy']
-            )
 
         # Параметры для оптимизации
         self.depth_scale = 1000.0
@@ -73,34 +56,54 @@ class PointCloudReconstructor:
 
     def _create_point_clouds_vectorized(self, selected_masks: List[Dict]) -> List[o3d.geometry.PointCloud]:
         point_clouds = []
-
+        
+        # Создаем pointcloud объект RealSense один раз вне цикла
+        pc = rs.pointcloud()
+        
         for mask_data in selected_masks:
             mask = mask_data['mask']
-            depth_values = mask_data['depth_values']
-
-            # Создаем полное изображение глубины из маски (как в исходном коде)
-            depth_image = np.zeros_like(mask, dtype=np.float32)
+            intrinsics = mask_data['depth_intrinsics']
             y_coords, x_coords = np.where(mask > 0)
-
+            
             if len(x_coords) < self.min_points_threshold:
                 continue
-
-            depth_image[y_coords, x_coords] = depth_values
-
-            # Используем Open3D метод (как в исходном)
-            depth_o3d = o3d.geometry.Image(depth_image.astype(np.uint16))
-            pcd = o3d.geometry.PointCloud.create_from_depth_image(
-                depth_o3d, self.o3d_intrinsics, depth_scale=1000.0, stride=Config.POINT_CLOUD_STRIDE
-            )
-
-            # Фильтрация как в исходном коде
-            points = np.asarray(pcd.points)
-            valid = (points[:, 2] > 0) & (points[:, 2] < 5.0)
-            pcd = pcd.select_by_index(np.where(valid)[0])
-
-            if len(pcd.points) > 100:
-                point_clouds.append(pcd)
-
+            
+            if intrinsics:
+                # Используем RealSense деproекцию с интринсиками
+                filtered_points = []
+                
+                for y, x, depth in zip(y_coords, x_coords, depth_values):
+                    if depth > 0:
+                        point = rs.rs2_deproject_pixel_to_point(intrinsics, [x, y], depth)
+                        point_m = [p / 1000.0 for p in point]
+                        filtered_points.append(point_m)
+                
+                if len(filtered_points) > 0:
+                    filtered_points = np.array(filtered_points)
+                    valid = (filtered_points[:, 2] > 0) & (filtered_points[:, 2] < 5.0)
+                    filtered_points = filtered_points[valid]
+                    
+                    if len(filtered_points) > 100:
+                        pcd = o3d.geometry.PointCloud()
+                        pcd.points = o3d.utility.Vector3dVector(filtered_points)
+                        point_clouds.append(pcd)
+            else:
+                # Fallback на Open3D метод
+                depth_image = np.zeros_like(mask, dtype=np.float32)
+                depth_image[y_coords, x_coords] = depth_values
+                
+                depth_o3d = o3d.geometry.Image(depth_image.astype(np.uint16))
+                pcd = o3d.geometry.PointCloud.create_from_depth_image(
+                    depth_o3d, self.o3d_intrinsics, depth_scale=1000.0, stride=Config.POINT_CLOUD_STRIDE
+                )
+                
+                points = np.asarray(pcd.points)
+                valid = (points[:, 2] > 0) & (points[:, 2] < 5.0)
+                pcd = pcd.select_by_index(np.where(valid)[0])
+                
+                if len(pcd.points) > 100:
+                    point_clouds.append(pcd)
+        
         return point_clouds
 
     def _merge_clouds_fast(self, point_clouds: List[o3d.geometry.PointCloud]) -> o3d.geometry.PointCloud:

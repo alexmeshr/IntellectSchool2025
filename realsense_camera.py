@@ -5,12 +5,14 @@ from interfaces import ICameraInterface
 from config import Config
 import cv2
 
-
+#rs.log_to_console(rs.log_severity.debug) 
 class RealSenseCamera(ICameraInterface):
     def __init__(self, apply_filters=True):
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.align = rs.align(rs.stream.color)
+        self.error_count = 0
+        self.max_errors = 5
 
         # Настройка потоков
         self.config.enable_stream(rs.stream.depth,
@@ -26,27 +28,24 @@ class RealSenseCamera(ICameraInterface):
     def setup_filters(self):
         """Настройка фильтров для улучшения качества глубины"""
         # Пространственный фильтр
-        self.spatial_filter = rs.spatial_filter()
-        self.spatial_filter.set_option(rs.option.filter_magnitude, 2)
-        self.spatial_filter.set_option(rs.option.filter_smooth_alpha, 0.5)
-        self.spatial_filter.set_option(rs.option.filter_smooth_delta, 20)
+        if self.apply_filters:
+            self.spatial_filter = rs.spatial_filter()
+            self.spatial_filter.set_option(rs.option.filter_magnitude, 2)
+            self.spatial_filter.set_option(rs.option.filter_smooth_alpha, 0.5)
+            self.spatial_filter.set_option(rs.option.filter_smooth_delta, 20)
 
-        # Временной фильтр
-        self.temporal_filter = rs.temporal_filter()
-        self.temporal_filter.set_option(rs.option.filter_smooth_alpha, 0.4)
-        self.temporal_filter.set_option(rs.option.filter_smooth_delta, 20)
+            # Временной фильтр
+            self.temporal_filter = rs.temporal_filter()
+            self.temporal_filter.set_option(rs.option.filter_smooth_alpha, 0.4)
+            self.temporal_filter.set_option(rs.option.filter_smooth_delta, 20)
 
-        # Фильтр дырок
-        self.hole_filling_filter = rs.hole_filling_filter()
+            # Фильтр дырок
+            self.hole_filling_filter = rs.hole_filling_filter()
 
-        # Децимация (уменьшение разрешения для ускорения)
-        self.decimation_filter = rs.decimation_filter()
-        self.decimation_filter.set_option(rs.option.filter_magnitude, 1)
-
-        # Пороговый фильтр
-        self.threshold_filter = rs.threshold_filter()
-        self.threshold_filter.set_option(rs.option.min_distance, 0.15)
-        self.threshold_filter.set_option(rs.option.max_distance, 4.0)
+            # Пороговый фильтр
+            self.threshold_filter = rs.threshold_filter()
+            self.threshold_filter.set_option(rs.option.min_distance, 0.15)
+            self.threshold_filter.set_option(rs.option.max_distance, 4.0)
 
     def start(self):
         """Запуск камеры с оптимальными настройками"""
@@ -62,7 +61,7 @@ class RealSenseCamera(ICameraInterface):
             # rs.rs400_visual_preset.high_density - высокая плотность точек
             # rs.rs400_visual_preset.medium_density - средняя плотность
             depth_sensor.set_option(rs.option.visual_preset,
-                                    rs.rs400_visual_preset.high_accuracy)
+                                    rs.rs400_visual_preset.high_density)
 
         if depth_sensor.supports(rs.option.laser_power):
             depth_sensor.set_option(rs.option.laser_power, Config.LASER_POWER)
@@ -99,10 +98,11 @@ class RealSenseCamera(ICameraInterface):
             color_frame = aligned_frames.get_color_frame()
 
             if not depth_frame or not color_frame:
-                return None, None
+                return None, None, None
+            
+            depth_intrinsics = depth_frame.profile.as_video_stream_profile().intrinsics
 
             if self.apply_filters:
-                depth_frame = self.decimation_filter.process(depth_frame)
                 depth_frame = self.spatial_filter.process(depth_frame)
                 depth_frame = self.temporal_filter.process(depth_frame)
                 depth_frame = self.hole_filling_filter.process(depth_frame)
@@ -110,16 +110,62 @@ class RealSenseCamera(ICameraInterface):
 
             depth_image = np.asanyarray(depth_frame.get_data())
             color_image = np.asanyarray(color_frame.get_data())
-            if Config.ROTATE:
+            if not Config.ORIENTATION_VERTICAL:
                 depth_image = cv2.rotate(depth_image, cv2.ROTATE_90_CLOCKWISE)
                 color_image = cv2.rotate(color_image, cv2.ROTATE_90_CLOCKWISE)
 
-            return color_image, depth_image
+            return color_image, depth_image, depth_intrinsics
 
         except Exception as e:
             print(f"Ошибка получения кадров: {e}")
-            return None, None
+            self.error_count += 1
+            
+            if self.error_count >= self.max_errors:
+                print("Слишком много ошибок, перезапускаем камеру...")
+                self._restart_camera()
+            return None, None, None
 
     def stop(self):
         """Остановка камеры"""
         self.pipeline.stop()
+
+    def _restart_camera(self):
+        """Полный перезапуск камеры"""
+        try:
+            print("Остановка камеры...")
+            # Останавливаем pipeline
+            try:
+                self.pipeline.stop()
+            except:
+                pass  # Игнорируем ошибку если pipeline уже остановлен
+            
+            # Очистка ресурсов
+            del self.pipeline
+            del self.config
+            del self.align
+            
+            # Задержка для освобождения устройства
+            import time
+            time.sleep(2)
+            
+            print("Переинициализация камеры...")
+            # Переинициализация
+            self.__init__()
+            
+            # Запуск с настройками
+            self.start()
+            
+            self.error_count = 0
+            print("Камера успешно перезапущена")
+            
+        except Exception as e:
+            print(f"Критическая ошибка при перезапуске камеры: {e}")
+            # Попытка простого перезапуска
+            try:
+                import time
+                time.sleep(3)
+                self._initialize_camera()
+                self.start()
+            except Exception as e2:
+                print(f"Не удалось перезапустить камеру: {e2}")
+                raise

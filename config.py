@@ -11,7 +11,8 @@ class Config:
 
     # Настройки глубины
     DEPTH_SCALE = 0.03
-    LASER_POWER = 240
+    LASER_POWER = 360
+    LASER_TRESHOLD = 2
 
     # Настройки YOLO
     YOLO_MODEL = "yolov8l-seg.pt"
@@ -50,7 +51,7 @@ class Config:
         'cy': 243.082,      # главная точка Y (ppy в RealSense)
         'depth_scale': 0.001  # масштаб глубины (метры)
     }
-    LASER_TRESHOLD = 2
+    
 
     @staticmethod
     def ensure_directories():

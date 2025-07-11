@@ -9,6 +9,8 @@ from point_cloud_reconstructor import PointCloudReconstructor
 from depth_processor import DepthProcessor
 from config import Config
 from dimension_estimator import DimensionEstimator
+import copy
+import threading
 
 
 def non_max_suppression_bbox(detections, iou_threshold=0.5):
@@ -38,14 +40,28 @@ class FrameProcessor:
         self.frame_count = 0
         self.enable_tracking = True  # Флаг для включения/выключения трекинга
         self.completed_objects = []
+        self.completed_objects_lock = threading.Lock()
 
-    def process_frame(self, color_image, depth_image, camera_pose=None):
+    def add_completed_object(self, obj_data):
+        """Потокобезопасное добавление объекта"""
+        with self.completed_objects_lock:
+            self.completed_objects.append(obj_data)
+            print(f"[COMPLETED] Добавлен объект {obj_data['id']} в список завершенных")
+            
+    def get_completed_objects(self):
+        """Потокобезопасное получение и очистка списка объектов"""
+        with self.completed_objects_lock:
+            objects = self.completed_objects.copy()
+            self.completed_objects.clear()
+            return objects
+
+    def process_frame(self, color_image, depth_image, depth_intrinsics, is_calibration=False):
         """Обработка кадра: детекция, сегментация, очистка depth"""
         self.frame_count += 1
         timestamp = datetime.now()
 
         # Детекция и сегментация
-        detection_results = self.detector.detect_and_segment(color_image)
+        detection_results = self.detector.detect_and_segment(color_image, is_calibration)
         person_mask = detection_results['person_mask']
         baggage_mask = detection_results['baggage_mask']
 
@@ -82,8 +98,9 @@ class FrameProcessor:
                         tracked_obj.add_depth_observation(
                             tracked_obj.mask,
                             depth_values,
-                            rgb_values,
-                            timestamp
+                            copy.deepcopy(rgb_values),
+                            timestamp,
+                            depth_intrinsics
                         )
 
         # Визуализация масок на RGB
@@ -311,6 +328,3 @@ class FrameProcessor:
             return self.reconstructor.intrinsics
         return None
 
-    def get_completed_objects(self):
-        """Получение завершенных объектов с облаками точек"""
-        return self.completed_objects

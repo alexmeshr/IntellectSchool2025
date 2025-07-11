@@ -38,16 +38,16 @@ class CameraManager:
             return None
 
         # Получение кадров с камеры
-        color_image, depth_image = self.camera.get_frames()
+        color_image, depth_image, depth_intrinsics = self.camera.get_frames()
         if color_image is None or depth_image is None:
             return None
 
         # Обработка кадров
-        results = self._frame_processor.process_frame(color_image, depth_image)
+        results = self._frame_processor.process_frame(color_image, depth_image, depth_intrinsics)
 
         # Запись если включена
         self.video_recorder.write_frame(
-            color_image, depth_image,
+            color_image, depth_image, depth_intrinsics,
             results['color_with_mask'],
             results['depth_colormap'],
             results['cleaned_depth_colormap'],

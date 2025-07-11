@@ -30,12 +30,14 @@ class VideoRecorder:
                 'depth': f"{Config.OUTPUT_DIR}/depth_{timestamp}.mp4",
                 'cleaned': f"{Config.OUTPUT_DIR}/cleaned_{timestamp}.mp4",
                 'raw_rgb_dir': f"{Config.RAW_DATA_DIR}/rgb_{timestamp}",
-                'raw_depth_dir': f"{Config.RAW_DATA_DIR}/depth_{timestamp}"
+                'raw_depth_dir': f"{Config.RAW_DATA_DIR}/depth_{timestamp}",
+                'raw_intrinsics_dir': f"{Config.RAW_DATA_DIR}/intrinsics_{timestamp}"
             }
 
             # Создаем директории для сырых данных
             os.makedirs(self.filenames['raw_rgb_dir'], exist_ok=True)
             os.makedirs(self.filenames['raw_depth_dir'], exist_ok=True)
+            os.makedirs(self.filenames['raw_intrinsics_dir'], exist_ok=True)
 
             self.record_separate = record_separate
             self.save_raw = save_raw
@@ -46,7 +48,7 @@ class VideoRecorder:
         except Exception as e:
             return False, f"Ошибка начала записи: {e}"
 
-    def write_frame(self, color_image, depth_image, color_with_mask,
+    def write_frame(self, color_image, depth_image, depth_intrinsics, color_with_mask,
                     depth_colormap, cleaned_depth_colormap, combined):
         """Записать кадр во все необходимые потоки"""
         if not self.recording:
@@ -90,6 +92,19 @@ class VideoRecorder:
                 depth_filename = f"{self.filenames['raw_depth_dir']}/frame_{self.frame_count:06d}.npy"
                 np.save(depth_filename, depth_image)
 
+                intrinsics_filename = f"{self.filenames['raw_intrinsics_dir']}/frame_{self.frame_count:06d}.npy"
+                intrinsics_data = {
+                    'width': depth_intrinsics.width,
+                    'height': depth_intrinsics.height,
+                    'ppx': depth_intrinsics.ppx,
+                    'ppy': depth_intrinsics.ppy,
+                    'fx': depth_intrinsics.fx,
+                    'fy': depth_intrinsics.fy,
+                    'model': depth_intrinsics.model.name,
+                    'coeffs': depth_intrinsics.coeffs
+                }
+                np.save(intrinsics_filename, intrinsics_data)
+
         except Exception as e:
             print(f"Ошибка записи кадра: {e}")
 
@@ -116,45 +131,6 @@ class VideoRecorder:
 
         except Exception as e:
             return False, f"Ошибка остановки записи: {e}"
-
-    def process_and_write_from_files(self, rgb_folder, depth_npy_folder, count=None):
-        """Обрабатывает и записывает RGB и глубинные кадры из файлов"""
-        self.start_recording()
-        rgb_files = sorted([f for f in os.listdir(
-            rgb_folder) if f.endswith(('.png', '.jpg'))])
-        depth_files = sorted([f for f in os.listdir(
-            depth_npy_folder) if f.endswith('.npy')])
-
-        if len(rgb_files) != len(depth_files):
-            print("Количество RGB и depth кадров не совпадает!")
-            return
-        idx = 0
-        for rgb_file, depth_file in zip(rgb_files, depth_files):
-            try:
-                idx += 1
-                if count is not None and idx > count:
-                    break
-                # Загрузка изображений
-                color_image = cv2.imread(os.path.join(rgb_folder, rgb_file))
-                depth_image = np.load(os.path.join(
-                    depth_npy_folder, depth_file))
-
-                # Глубина в colormap
-                # depth_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
-                # depth_colormap = cv2.applyColorMap(depth_normalized.astype(np.uint8), cv2.COLORMAP_JET)
-
-                # Комбинированное изображение (эмуляция)
-                combined = np.hstack(
-                    (color_image.copy(), color_image.copy(), color_image.copy()))
-
-                # Запись
-                self.write_frame(color_image, depth_image, color_image.copy(),
-                                 color_image.copy(), color_image.copy(), combined)
-
-            except Exception as e:
-                print(f"Ошибка обработки кадра {rgb_file}: {e}")
-
-        return self.stop_recording(return_files=True)
 
     @staticmethod
     def get_recordings_list():

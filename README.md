@@ -4,7 +4,7 @@
 
 ```bash
 # Установка зависимостей
-pip install pyrealsense2 numpy opencv-python flask ultralytics filterpy
+pip install pyrealsense2 numpy opencv-python flask ultralytics filterpy open3d scipy
 ```
 
 ## Структура проекта

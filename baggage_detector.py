@@ -7,7 +7,7 @@ from config import Config
 
 # Отключение логов YOLO
 logging.getLogger('ultralytics').setLevel(logging.ERROR)
-
+#проверить дисторсию, 
 
 class BaggageDetector:
     def __init__(self, model_path=None):
@@ -17,9 +17,48 @@ class BaggageDetector:
         # Загрузка модели с подавлением вывода
         self.yolo = YOLO(model_path, verbose=False)
 
-    def detect_and_segment(self, image: np.ndarray) -> dict:
+    def detect_and_segment(self, image: np.ndarray, is_calibration=False) -> dict:
         """Детекция людей и багажа с полной информацией для трекинга"""
         try:
+            if is_calibration:
+                # Более мощная детекция шахматной доски
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                cv2.imshow(gray)
+                # Улучшение контраста
+                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+                gray = clahe.apply(gray)
+                
+                checkerboard_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+                
+                # Пробуем разные размеры паттернов
+                patterns = [(9,6)]#, (7,5), (8,6), (6,4), (10,7), (5,4)
+                
+                for pattern in patterns:
+                    ret, corners = cv2.findChessboardCorners(
+                        gray, pattern, 
+                        cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FILTER_QUADS
+                    )
+                    
+                    if ret:
+                        # Уточняем углы
+                        corners = cv2.cornerSubPix(gray, corners, (11,11), (-1,-1), 
+                                                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.1))
+                        
+                        # Создаем расширенную маску
+                        hull = cv2.convexHull(corners.astype(np.int32))
+                        cv2.fillPoly(checkerboard_mask, [hull], 255)
+                        
+                        # Расширяем маску для захвата большей области
+                        kernel = np.ones((20,20), np.uint8)
+                        checkerboard_mask = cv2.dilate(checkerboard_mask, kernel, iterations=1)
+                        break
+                
+                return {
+                    'person_mask': np.zeros(image.shape[:2], dtype=np.uint8),
+                    'baggage_mask': checkerboard_mask,
+                    'baggage_detections': [],
+                    'person_boxes': []
+                }
             # Детекция всех объектов
             all_classes = [Config.PERSON_CLASS] + Config.BAGGAGE_CLASSES
             results = self.yolo(image, classes=all_classes,
