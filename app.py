@@ -8,7 +8,7 @@ from mock_camera import MockCamera
 from config import Config
 import os
 import base64
-from io import BytesIO
+import atexit
 
 app = Flask(__name__)
 
@@ -99,6 +99,7 @@ def main(use_mock=False, rgb_folder=None, depth_folder=None):
         else:
             print("Инициализация Intel RealSense...")
             camera = RealSenseCamera()
+            atexit.register(camera.stop)
 
         # Создание менеджера
         camera_manager = CameraManager(camera, Config.CAMERA_INTRINSICS)
