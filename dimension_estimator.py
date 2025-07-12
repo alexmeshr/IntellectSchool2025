@@ -139,6 +139,12 @@ class DimensionEstimator:
         voxel_size = 0.02  # 1 см - достаточно для габаритов
         pcd = pcd.voxel_down_sample(voxel_size)
         
+        # 2. Удаляем точки без достаточного количества соседей (морфологическая эрозия чтобы убрать лямки ручки)
+        pcd_clean, _ = pcd.remove_radius_outlier(
+            nb_points=15,  # Нужно минимум 15 соседей
+            radius=0.06    # В радиусе 6 см
+        )
+
         if len(pcd.points) < 10:
             return np.asarray(pcd.points)
         
