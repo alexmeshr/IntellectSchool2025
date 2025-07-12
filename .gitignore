@@ -9,5 +9,5 @@ school_data/*
 *avi
 *mp4
 *pt
-*.png
+raw_data/*
 *.json
