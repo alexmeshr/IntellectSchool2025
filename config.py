@@ -15,7 +15,7 @@ class Config:
 
     # Настройки YOLO
     YOLO_MODEL = "yolov8s-seg.pt"
-    BAG_CONFIDENCE = 0.4
+    BAG_CONFIDENCE = 0.25
     PERSON_CONFIDENCE = 0.99  # отключил людей
 
     # Классы для детекции
