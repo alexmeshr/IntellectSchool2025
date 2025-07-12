@@ -107,13 +107,13 @@ python app.py --mock --video ../raw_data/rgb_frames/ --depth ./raw_data/depth_fr
       <br/><b>1. Исходный кадр</b>
     </td>
     <td align="center">
-      <img src="templates\out1" width="300"/>
+      <img src="templates\out1.png" width="300"/>
       <br/><b>2. Сегментация</b>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="templates\out2" width="300"/>
+      <img src="templates\out2.png" width="300"/>
       <br/><b>3. Очищенная карта глубины</b>
     </td>
     <td align="center">
