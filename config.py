@@ -14,8 +14,8 @@ class Config:
     LASER_TRESHOLD = 2
 
     # Настройки YOLO
-    YOLO_MODEL = "yolov8m-seg.pt"
-    BAG_CONFIDENCE = 0.2
+    YOLO_MODEL = "yolov8s-seg.pt"
+    BAG_CONFIDENCE = 0.4
     PERSON_CONFIDENCE = 0.99  # отключил людей
 
     # Классы для детекции
@@ -27,7 +27,7 @@ class Config:
     MAX_DISTANCE = 100  # Максимальное расстояние для сопоставления (пиксели)
 
     # Параметры 3D реконструкции
-    MIN_OBSERVATIONS = 5  # Минимум наблюдений для реконструкции
+    MIN_OBSERVATIONS = 4  # Минимум наблюдений для реконструкции
     MAX_OBSERVATIONS = 15  # Максимум для оптимизации памяти
     POINT_CLOUD_STRIDE = 1
     TOP_N_ESTIMATIONS = 6

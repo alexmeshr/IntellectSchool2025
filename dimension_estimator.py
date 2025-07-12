@@ -5,6 +5,7 @@ import cv2
 import open3d as o3d
 from config import Config
 from scipy import stats
+import copy
 
 
 class DimensionEstimator:
@@ -20,8 +21,10 @@ class DimensionEstimator:
         # Инициализируем кэш для избежания повторных вычислений
         self._frame_estimations_cache = {}
         
-        for i, mask_data in enumerate(depth_masks):
+        for i, mask_data in enumerate(depth_masks[:-(Config.MAX_DISAPPEARED+1)]):#ТУПОЕ РЕШЕНИЕ НО ФИКСИТ БАГ
             mask = mask_data['mask']
+            if mask is None:
+                continue
             depth_values = mask_data['depth_values']
             
             # Базовая проверка
@@ -211,7 +214,6 @@ class DimensionEstimator:
         # Выбираем лучший кадр с проверкой на аномалии
         best_idx = self.select_best_frame(depth_masks)
         best_mask_data = depth_masks[best_idx]
-        
         # Используем общий метод обработки
         result = self._process_mask_to_bbox(best_mask_data)
         if result is None:
@@ -333,8 +335,8 @@ class DimensionEstimator:
 
     def _process_mask_to_bbox(self, mask_data):
         """Общий метод для преобразования маски в bbox данные"""
-        mask = mask_data['mask']
-        depth_values = mask_data['depth_values']
+        mask = copy.deepcopy(mask_data['mask'])
+        depth_values = copy.deepcopy(mask_data['depth_values'])
         
         # Восстанавливаем полное изображение глубины из маски
         depth_image = np.zeros_like(mask, dtype=np.float32)

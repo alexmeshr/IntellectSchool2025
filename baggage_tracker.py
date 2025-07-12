@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 from collections import defaultdict
 import uuid
-
+import copy
 
 class BaggageTracker:
     def __init__(self, max_disappeared=10, max_distance=50):
@@ -57,7 +57,7 @@ class BaggageTracker:
 
                     # Дополнительная проверка валидности сопоставления
                     if self._is_valid_match(obj_id, detection):
-                        self._update_object(obj_id, detection)
+                        self._update_object(obj_id, detection=detection)
                         used_objects.add(obj_idx)
                         used_detections.add(det_idx)
 
@@ -65,7 +65,7 @@ class BaggageTracker:
                 object_ids = list(self.tracked_objects.keys())
                 for i, obj_id in enumerate(object_ids):
                     if i not in used_objects:
-                        self.disappeared[obj_id] += 1
+                        self._update_object(obj_id, disappeared=True)
                         if self.disappeared[obj_id] > self.max_disappeared:
                             self._deregister(obj_id)
 
@@ -229,21 +229,29 @@ class BaggageTracker:
         self.objects_to_finalize.clear()
         return objects
 
-    def _update_object(self, obj_id, detection):
+    def _update_object(self, obj_id, detection=None, disappeared=False):
         """Обновление существующего объекта"""
         obj = self.tracked_objects[obj_id]
+        if obj.mask is not None:
+            obj.last_mask=obj.mask.copy()
 
-        # Вычисляем скорость
-        # f obj.centroid is not None:
-        #    velocity = detection['centroid'] - obj.centroid
-        #    # Сглаживаем скорость
-        #    if hasattr(obj, 'velocity') and obj.velocity is not None:
-        #        obj.velocity = 0.7 * obj.velocity + 0.3 * velocity
-        #    else:
-        #        obj.velocity = velocity
+        if disappeared:
+            self.disappeared[obj_id] += 1
+            obj.mask=None
+            
+        else:
 
-        obj.update(detection)
-        self.disappeared[obj_id] = 0
+            # Вычисляем скорость
+            # f obj.centroid is not None:
+            #    velocity = detection['centroid'] - obj.centroid
+            #    # Сглаживаем скорость
+            #    if hasattr(obj, 'velocity') and obj.velocity is not None:
+            #        obj.velocity = 0.7 * obj.velocity + 0.3 * velocity
+            #    else:
+            #        obj.velocity = velocity
+
+            obj.update(detection)
+            self.disappeared[obj_id] = 0
 
 
 class TrackedObject:
@@ -256,6 +264,7 @@ class TrackedObject:
             detection['centroid']) if detection['centroid'] is not None else None
         self.bbox = detection.get('bbox')
         self.mask = detection.get('mask')
+        self.last_mask = detection.get('mask')
         self.class_id = detection.get('class_id')
         self.confidence = detection.get('confidence', 0.0)
         self.area = detection.get('area', 0)
@@ -296,18 +305,20 @@ class TrackedObject:
                                     [np.float32(detection['centroid'][1])]])
             self.kalman.correct(measurement)
         if 'bbox' in detection:
-            self.bbox = detection['bbox']
+            self.bbox = detection.get('bbox')
         if 'mask' in detection:
-            self.mask = detection['mask']
+            self.mask = detection.get('mask')
+            self.last_mask = self.mask.copy()
+        
         if 'confidence' in detection:
-            self.confidence = detection['confidence']
+            self.confidence = detection.get('confidence')
         if 'area' in detection:
             self.area = detection['area']
 
     def add_depth_observation(self, mask, depth_values, rgb_values, timestamp, depth_intrinsics):
         """Добавление наблюдения depth маски"""
         self.depth_masks.append({
-            'mask': mask.copy(),
+            'mask': mask,
             'depth_values': depth_values.copy(),
             'rgb_values': rgb_values.copy(),
             'timestamp': timestamp,

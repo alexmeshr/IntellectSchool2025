@@ -9,7 +9,6 @@ from point_cloud_reconstructor import PointCloudReconstructor
 from depth_processor import DepthProcessor
 from config import Config
 from dimension_estimator import DimensionEstimator
-import copy
 import threading
 
 
@@ -55,13 +54,13 @@ class FrameProcessor:
             self.completed_objects.clear()
             return objects
 
-    def process_frame(self, color_image, depth_image, depth_intrinsics, is_calibration=False):
+    def process_frame(self, color_image, depth_image, depth_intrinsics):
         """Обработка кадра: детекция, сегментация, очистка depth"""
         self.frame_count += 1
         timestamp = datetime.now()
 
         # Детекция и сегментация
-        detection_results = self.detector.detect_and_segment(color_image, is_calibration)
+        detection_results = self.detector.detect_and_segment(color_image)
         person_mask = detection_results['person_mask']
         baggage_mask = detection_results['baggage_mask']
 
@@ -98,7 +97,7 @@ class FrameProcessor:
                         tracked_obj.add_depth_observation(
                             tracked_obj.mask,
                             depth_values,
-                            copy.deepcopy(rgb_values),
+                            rgb_values,
                             timestamp,
                             depth_intrinsics
                         )
@@ -176,13 +175,13 @@ class FrameProcessor:
 
             # Полупрозрачная маска для багажа
             overlay = color_with_mask.copy()
-            overlay[tracked_obj.mask > 0] = color
+            overlay[tracked_obj.last_mask > 0] = color
             color_with_mask = cv2.addWeighted(
                 color_with_mask, 0.7, overlay, 0.3, 0)
 
             # Контур маски
             contours, _ = cv2.findContours(
-                tracked_obj.mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                tracked_obj.last_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
             cv2.drawContours(color_with_mask, contours, -1, color, 2)
 
@@ -259,12 +258,13 @@ class FrameProcessor:
             max_dims_meters: максимальные габариты в метрах [длина, ширина, высота]
         """
         # Берем RGB изображение из лучшего кадра
-        rgb_image = obj_data['rgb_image'].copy()
+        #rgb_image = obj_data['rgb_image'].copy()
 
         # Получаем маску из лучшего кадра
         best_frame_index = obj_data['best_frame_index']
         mask_data = obj_data['all_masks'][best_frame_index]
-        mask = mask_data['mask']
+        mask = mask_data['mask'].copy()
+        rgb_image = mask_data['rgb_values'].copy()
 
         # Находим контур объекта
         contours, _ = cv2.findContours(mask.astype(
