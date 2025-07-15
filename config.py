@@ -30,7 +30,7 @@ class Config:
     MIN_OBSERVATIONS = 4  # Минимум наблюдений для реконструкции
     MAX_OBSERVATIONS = 15  # Максимум для оптимизации памяти
     POINT_CLOUD_STRIDE = 1
-    TOP_N_ESTIMATIONS = 6
+    TOP_N_ESTIMATIONS = 10
     OUTLIER_THRESHOLD = 2
 
     # Пути

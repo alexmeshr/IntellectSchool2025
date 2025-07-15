@@ -141,8 +141,8 @@ class DimensionEstimator:
         
         # 2. Удаляем точки без достаточного количества соседей (морфологическая эрозия чтобы убрать лямки ручки)
         pcd_clean, _ = pcd.remove_radius_outlier(
-            nb_points=15,  # Нужно минимум 15 соседей
-            radius=0.06    # В радиусе 6 см
+            nb_points=20,  # Нужно минимум 20 соседей
+            radius=0.04    # В радиусе 6 см
         )
 
         if len(pcd.points) < 10:
@@ -151,7 +151,7 @@ class DimensionEstimator:
         # 2. DBSCAN кластеризация
         labels = np.array(pcd.cluster_dbscan(
             eps=0.05,  # 5 см - расстояние между точками в одном кластере
-            min_points=10,  # минимум точек в кластере
+            min_points=20,  # минимум точек в кластере
             print_progress=False
         ))
         if labels.max() < 0:  # Нет кластеров
